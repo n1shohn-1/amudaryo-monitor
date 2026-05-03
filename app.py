@@ -27,25 +27,26 @@ if not st.session_state.authenticated:
                 st.error("❌ Parol noto'g'ri! Administrator bilan bog'laning.")
     st.stop()
 
-# --- 🛰 GOOGLE EARTH ENGINE ULANISHI (Optimallashgan) ---
+# --- 🛰 GOOGLE EARTH ENGINE ULANISHI (Mukammal va Xavfsiz) ---
 try:
     if "earth_engine" in st.secrets:
-        # Secrets-dan JSON matnni olamiz
-        ee_key_str = st.secrets["earth_engine"]["json_key"]
-        # Matnni Python lug'atiga (dict) aylantiramiz
-        ee_key_dict = json.loads(ee_key_str)
+        # Secrets-dan xom matnni olamiz
+        ee_key_raw = st.secrets["earth_engine"]["json_key"]
         
-        # Muhim: ee.ServiceAccountCredentials-ga lug'at obyektini beramiz
+        # JSON ichidagi yashirin belgilarni tozalash (xatolikni oldini oladi)
+        ee_key_dict = json.loads(ee_key_raw)
+        
+        # Autentifikatsiya
         credentials = ee.ServiceAccountCredentials(
             ee_key_dict['client_email'], 
-            key_data=ee_key_dict  # Bu yerda ee_key_str emas, ee_key_dict ishlatildi
+            key_data=ee_key_raw
         )
         ee.Initialize(credentials, project='ee-nusratullayev38')
     else:
         ee.Initialize(project='ee-nusratullayev38')
 except Exception as e:
     st.error(f"Google Earth Engine autentifikatsiya xatosi: {e}")
-    st.info("Eslatma: Streamlit Cloud-da 'Secrets' bo'limiga JSON kalitni to'g'ri formatda joylaganingizga ishonch hosil qiling.")
+    st.info("💡 Eslatma: Streamlit Cloud-da 'Secrets' bo'limiga JSON kalitni to'g'ri formatda joylaganingizga ishonch hosil qiling.")
     st.stop()
 
 # --- ASOSIY INTERFEYS ---
@@ -90,7 +91,7 @@ if not st.session_state.started:
             st.rerun()
     st.stop()
 
-# Sidebar va Tahlil funksiyalari o'zgarishsiz qoldi...
+# --- SIDEBAR VA TAHLIL ---
 st.sidebar.image("https://img.icons8.com/fluency/96/river.png", width=80)
 st.sidebar.title("📍 Boshqaruv paneli")
 locations = {
@@ -120,28 +121,39 @@ def analyze_river(coords, radius):
     region = point.buffer(radius).bounds()
     def get_landsat(year):
         return ee.ImageCollection("LANDSAT/LC08/C02/T1_L2").filterBounds(region).filterDate(f'{year}-01-01', f'{year}-12-31').sort('CLOUD_COVER').first()
+    
     img_old = get_landsat(past_year)
     img_now = get_landsat(current_year)
+    
     if not img_old or not img_now: return None
+    
     mask_old = img_old.normalizedDifference(['SR_B3', 'SR_B5']).rename('w').gt(0.1)
     mask_now = img_now.normalizedDifference(['SR_B3', 'SR_B5']).rename('w').gt(0.1)
+    
     erosion = mask_now.subtract(mask_old).gt(0).selfMask()
     retreat = mask_old.subtract(mask_now).gt(0).selfMask()
+    
     def get_area(mask):
         area = mask.multiply(ee.Image.pixelArea()).reduceRegion(reducer=ee.Reducer.sum(), geometry=region, scale=30, maxPixels=1e9)
         return ee.Number(area.get('w', 0)).divide(10000).round().getInfo()
+    
     area_old = get_area(mask_old)
     area_now = get_area(mask_now)
     area_ero = get_area(erosion)
     area_ret = get_area(retreat)
+    
     change_rate = (area_now - area_old) / 10
     area_fut = int(area_now + (change_rate * 5))
+    
     future_risk = erosion.focal_max(radius=350, units='meters').selfMask()
+    
     vis = {'bands': ['SR_B4', 'SR_B3', 'SR_B2'], 'min': 0, 'max': 30000}
     v_params = {'dimensions': 800, 'format': 'jpg', 'region': region}
+    
     u1 = img_old.visualize(**vis).getThumbURL(v_params)
     u2 = img_now.visualize(**vis).blend(erosion.visualize(palette=['#0000FF'], opacity=0.8)).blend(retreat.visualize(palette=['#FFFF00'], opacity=0.8)).getThumbURL(v_params)
     u3 = img_now.visualize(**vis).blend(future_risk.visualize(palette=['#FF00FF'], opacity=0.7)).getThumbURL(v_params)
+    
     return u1, u2, u3, area_old, area_now, area_ero, area_ret, area_fut
 
 with st.spinner("🛰 Sun'iy yo'ldosh tahlili ketmoqda..."):
