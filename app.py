@@ -3,11 +3,12 @@ import ee
 import pandas as pd
 import plotly.express as px
 from datetime import datetime
+import json  # Yangi qo'shildi
 
 # 1. Sahifa dizayni va sozlamalar
 st.set_page_config(page_title="Amudaryo AI-Monitor Pro", layout="wide", initial_sidebar_state="expanded")
 
-# --- 🔐 PAROL HIMOYASI (Yangi qo'shilgan qism) ---
+# --- 🔐 PAROL HIMOYASI ---
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
@@ -19,17 +20,36 @@ if not st.session_state.authenticated:
     with col_p2:
         password = st.text_input("Parol:", type="password")
         if st.button("Tizimga kirish"):
-            # BU YERGA O'ZINGIZ ISTAGAN PAROLNI YOZING:
             if password == "Amudaryo_AI": 
                 st.session_state.authenticated = True
                 st.rerun()
             else:
                 st.error("❌ Parol noto'g'ri! Administrator bilan bog'laning.")
-    st.stop() # Parol kiritilmaguncha pastki kod ishlamaydi
+    st.stop()
 
-# --- SIZNING MAVJUD VA MUKAMMAL KODINGIZ (O'zgarmagan holatda) ---
+# --- 🛰 GOOGLE EARTH ENGINE ULANISHI (To'g'rilangan qism) ---
+try:
+    # Streamlit Secrets-dan kalitni o'qish
+    if "earth_engine" in st.secrets:
+        ee_key_str = st.secrets["earth_engine"]["json_key"]
+        ee_key_dict = json.loads(ee_key_str)
+        
+        # Service Account orqali ulanish
+        credentials = ee.ServiceAccountCredentials(
+            ee_key_dict['client_email'], 
+            key_data=ee_key_str
+        )
+        ee.Initialize(credentials, project='ee-nusratullayev38')
+    else:
+        # Agar Secrets bo'sh bo'lsa, oddiy Initialize (mahalliy kompyuter uchun)
+        ee.Initialize(project='ee-nusratullayev38')
+except Exception as e:
+    st.error(f"Google Earth Engine autentifikatsiya xatosi: {e}")
+    st.info("Eslatma: Streamlit Cloud-da 'Secrets' bo'limiga JSON kalitni joylaganingizga ishonch hosil qiling.")
+    st.stop()
 
-# Professional Dizayn CSS
+# --- SIZNING MAVJUD VA MUKAMMAL KODINGIZ ---
+
 st.markdown("""
     <style>
     .main { background-color: #f8fafc; }
@@ -50,18 +70,9 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# GEE ULANISHI
-try:
-    ee.Initialize(project='ee-nusratullayev38')
-except:
-    st.error("Google Earth Engine autentifikatsiya xatosi!")
-    st.stop()
-
-# SESSION STATE (Start tugmasi uchun)
 if 'started' not in st.session_state:
     st.session_state.started = False
 
-# Welcome Screen
 if not st.session_state.started:
     st.markdown("""
         <div class="welcome-text">
@@ -80,7 +91,6 @@ if not st.session_state.started:
             st.rerun()
     st.stop()
 
-# --- ASOSIY TAHLIL QISMI ---
 st.sidebar.image("https://img.icons8.com/fluency/96/river.png", width=80)
 st.sidebar.title("📍 Boshqaruv paneli")
 locations = {
