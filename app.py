@@ -3,7 +3,7 @@ import ee
 import pandas as pd
 import plotly.express as px
 from datetime import datetime
-import json  # Yangi qo'shildi
+import json
 
 # 1. Sahifa dizayni va sozlamalar
 st.set_page_config(page_title="Amudaryo AI-Monitor Pro", layout="wide", initial_sidebar_state="expanded")
@@ -27,29 +27,28 @@ if not st.session_state.authenticated:
                 st.error("❌ Parol noto'g'ri! Administrator bilan bog'laning.")
     st.stop()
 
-# --- 🛰 GOOGLE EARTH ENGINE ULANISHI (To'g'rilangan qism) ---
+# --- 🛰 GOOGLE EARTH ENGINE ULANISHI (Optimallashgan) ---
 try:
-    # Streamlit Secrets-dan kalitni o'qish
     if "earth_engine" in st.secrets:
+        # Secrets-dan JSON matnni olamiz
         ee_key_str = st.secrets["earth_engine"]["json_key"]
+        # Matnni Python lug'atiga (dict) aylantiramiz
         ee_key_dict = json.loads(ee_key_str)
         
-        # Service Account orqali ulanish
+        # Muhim: ee.ServiceAccountCredentials-ga lug'at obyektini beramiz
         credentials = ee.ServiceAccountCredentials(
             ee_key_dict['client_email'], 
-            key_data=ee_key_str
+            key_data=ee_key_dict  # Bu yerda ee_key_str emas, ee_key_dict ishlatildi
         )
         ee.Initialize(credentials, project='ee-nusratullayev38')
     else:
-        # Agar Secrets bo'sh bo'lsa, oddiy Initialize (mahalliy kompyuter uchun)
         ee.Initialize(project='ee-nusratullayev38')
 except Exception as e:
     st.error(f"Google Earth Engine autentifikatsiya xatosi: {e}")
-    st.info("Eslatma: Streamlit Cloud-da 'Secrets' bo'limiga JSON kalitni joylaganingizga ishonch hosil qiling.")
+    st.info("Eslatma: Streamlit Cloud-da 'Secrets' bo'limiga JSON kalitni to'g'ri formatda joylaganingizga ishonch hosil qiling.")
     st.stop()
 
-# --- SIZNING MAVJUD VA MUKAMMAL KODINGIZ ---
-
+# --- ASOSIY INTERFEYS ---
 st.markdown("""
     <style>
     .main { background-color: #f8fafc; }
@@ -91,6 +90,7 @@ if not st.session_state.started:
             st.rerun()
     st.stop()
 
+# Sidebar va Tahlil funksiyalari o'zgarishsiz qoldi...
 st.sidebar.image("https://img.icons8.com/fluency/96/river.png", width=80)
 st.sidebar.title("📍 Boshqaruv paneli")
 locations = {
