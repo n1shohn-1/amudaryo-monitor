@@ -5,7 +5,7 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime
 
-# 1. SAHIFA SOZLAMALARI (O'zgarishsiz)
+# 1. SAHIFA SOZLAMALARI
 st.set_page_config(
     page_title="Amudaryo AI-Monitor | Shaxriyor",
     page_icon="🛰",
@@ -26,7 +26,7 @@ except Exception as e:
     st.error(f"🛰 Tizimga ulanishda xatolik: {e}")
     st.stop()
 
-# --- 🎨 MODERN CYBER-UZBEK DIZAYNI (O'zgarishsiz saqlandi) ---
+# --- 🎨 MODERN CYBER-UZBEK DIZAYNI ---
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Exo+2:wght@300;600&display=swap');
@@ -80,28 +80,26 @@ current_year = 2026
 past_year = current_year - 10
 future_year = current_year + 5
 
-# --- 🧠 AQLLI TAHLIL VA PROGNOZ ALGORITMI ---
+# --- 🧠 SUPER-AQLLI TAHLIL ALGORITMI ---
 def analyze_river_advanced(coords, radius):
     try:
         point = ee.Geometry.Point(coords[1], coords[0])
         region = point.buffer(radius).bounds()
         
-        # Tasvirlarni qidirishda "Smart Search" (Bulut kamrog'ini tanlash)
         def get_best_img(year):
-            # 1-qadam: Sentinel-2 qidirish
+            # Sentinel-2 qidiruvi (Kengaytirilgan vaqt bilan)
             coll = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED") \
                 .filterBounds(region) \
-                .filterDate(f'{year-1}-01-01', f'{year}-12-31') \
-                .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20)) \
+                .filterDate(f'{year-2}-01-01', f'{year}-12-31') \
                 .sort('CLOUDY_PIXEL_PERCENTAGE')
             
             img = coll.first()
             
-            # 2-qadam: Agar Sentinel bo'sh bo'lsa, Landsat-8 ga o'tish
-            if img.getInfo() is None:
+            # Agar Sentinel bo'lmasa, Landsat-8 ga o'tish
+            if not img.getInfo():
                 img = ee.ImageCollection("LANDSAT/LC08/C02/T1_L2") \
                     .filterBounds(region) \
-                    .filterDate(f'{year-2}-01-01', f'{year}-12-31') \
+                    .filterDate(f'{year-3}-01-01', f'{year}-12-31') \
                     .sort('CLOUD_COVER') \
                     .first()
             return img
@@ -109,15 +107,20 @@ def analyze_river_advanced(coords, radius):
         img_old = get_best_img(past_year)
         img_now = get_best_img(current_year)
 
-        if not img_old or not img_now: return None
+        # Agar hali ham rasm topilmasa (bazada yo'qligini anglatadi)
+        if not img_old.getInfo() or not img_now.getInfo(): 
+            return "NO_DATA"
 
-        # NDWI - Suvni aniqlash (Sezgirlik 0.05 ga tushirildi)
-        # Bandlar Sentinel va Landsat uchun moslashtirilgan
-        is_sentinel = 'B3' in img_now.bandNames().getInfo()
-        bands = ['B3', 'B8'] if is_sentinel else ['SR_B3', 'SR_B5']
+        # NDWI - Suvni aniqlash
+        # Bandlar Sentinel yoki Landsatligiga qarab avtomatik tanlanadi
+        band_names = img_now.bandNames().getInfo()
+        is_sentinel = 'B3' in band_names
         
-        mask_old = img_old.normalizedDifference(bands).gt(0.05)
-        mask_now = img_now.normalizedDifference(bands).gt(0.05)
+        green = 'B3' if is_sentinel else 'SR_B3'
+        nir = 'B8' if is_sentinel else 'SR_B5'
+        
+        mask_old = img_old.normalizedDifference([green, nir]).gt(0.0)
+        mask_now = img_now.normalizedDifference([green, nir]).gt(0.0)
 
         # Yemirilish va Chekinish
         erosion = mask_now.subtract(mask_old).gt(0).selfMask()
@@ -127,25 +130,28 @@ def analyze_river_advanced(coords, radius):
             area = mask.multiply(ee.Image.pixelArea()).reduceRegion(
                 reducer=ee.Reducer.sum(), geometry=region, scale=30, maxPixels=1e9
             )
-            return ee.Number(area.get('nd', 0)).divide(10000).round().getInfo()
+            val = area.get('nd', 0)
+            return ee.Number(val).divide(10000).round().getInfo()
 
-        a_old, a_now = get_area(mask_old), get_area(mask_now)
-        a_ero, a_ret = get_area(erosion), get_area(retreat)
+        a_old = get_area(mask_old)
+        a_now = get_area(mask_now)
+        a_ero = get_area(erosion)
+        a_ret = get_area(retreat)
 
-        # Bashorat mantiqi (Linear Trend)
+        # Bashorat
         change_rate = (a_now - a_old) / 10
         a_fut = int(a_now + (change_rate * 5))
         
-        # Vizualizatsiya sozlamalari
-        vis = {'bands': ['B4', 'B3', 'B2'], 'min': 0, 'max': 3000} if is_sentinel else {'bands': ['SR_B4', 'SR_B3', 'SR_B2'], 'min': 0, 'max': 30000}
+        # Vizualizatsiya
+        vis_params = {'bands': ['B4', 'B3', 'B2'], 'min': 0, 'max': 3000} if is_sentinel else {'bands': ['SR_B4', 'SR_B3', 'SR_B2'], 'min': 0, 'max': 30000}
         
-        url_old = img_old.visualize(**vis).getThumbURL({'dimensions': 800, 'region': region, 'format': 'jpg'})
-        url_now = img_now.visualize(**vis).blend(erosion.visualize(palette=['#00f2ff'], opacity=0.7)).getThumbURL({'dimensions': 800, 'region': region, 'format': 'jpg'})
-        url_fut = img_now.visualize(**vis).getThumbURL({'dimensions': 800, 'region': region, 'format': 'jpg'})
+        url_old = img_old.visualize(**vis_params).getThumbURL({'dimensions': 800, 'region': region, 'format': 'jpg'})
+        url_now = img_now.visualize(**vis_params).blend(erosion.visualize(palette=['#00f2ff'], opacity=0.7)).getThumbURL({'dimensions': 800, 'region': region, 'format': 'jpg'})
+        url_fut = img_now.visualize(**vis_params).getThumbURL({'dimensions': 800, 'region': region, 'format': 'jpg'})
 
         return url_old, url_now, url_fut, a_old, a_now, a_ero, a_ret, a_fut
     except Exception as e:
-        print(f"Xato: {e}")
+        st.sidebar.error(f"Algoritm xatosi: {e}")
         return None
 
 # --- 🚀 NATIJALARNI CHIQARISH ---
@@ -153,10 +159,12 @@ col_h1, col_h2 = st.columns([4, 1])
 with col_h1: st.markdown(f"<h1>🌊 Amudaryo AI-DeformRisk Pro</h1>", unsafe_allow_html=True)
 with col_h2: st.markdown(f"<div class='metric-card'><p>JORIY YIL</p><h3>{current_year}</h3></div>", unsafe_allow_html=True)
 
-with st.spinner("🛰 Shaxriyor AI algoritmlari koinotdan ma'lumot olmoqda..."):
+with st.spinner("🛰 Sun'iy yo'ldoshlar bilan aloqa o'rnatilmoqda..."):
     results = analyze_river_advanced(locations[selected_city], radius)
 
-if results:
+if results == "NO_DATA":
+    st.warning("🔭 DIQQAT: Google Earth Engine bazasida ushbu yil uchun hali tasvir shakllanmagan. Iltimos, radiusni o'zgartiring yoki biroz kuting.")
+elif results:
     u1, u2, u3, a_old, a_now, a_ero, a_ret, a_fut = results
     
     st.subheader("🖼 Gidrologik O'zgarishlar Vizualizatsiyasi")
@@ -182,13 +190,13 @@ if results:
         <hr style='border: 0.5px solid #ff4b4b;'>
         <p><b>💡 SHAXRIYOR TAVSIYASI:</b> Ko'k bilan belgilangan (yemirilgan) hududlarda qirg'oqni mustahkamlash va damba qurish ishlarini rejalashtirish zarur.</p>
         <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-top: 10px;">
-            <span>Tizim: Amudaryo AI Pro v2.0</span>
+            <span>Tizim: Amudaryo AI Pro v2.1</span>
             <span>BOSH MUHANDIS: SHAXRIYOR</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
 else:
-    st.warning("⚠️ SENSOR XATOSI: Hududda bulutlilik yuqori yoki ma'lumot yetishmayapti. Iltimos, radiusni o'zgartirib qayta urinib ko'ring.")
+    st.error("🔌 Tizimda kutilmagan texnik xatolik. Iltimos, sahifani yangilang.")
 
 if st.sidebar.button("🔌 TIZIMNI O'CHIRISH"):
     st.session_state.auth = False
