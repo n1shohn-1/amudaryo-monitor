@@ -5,7 +5,7 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime
 
-# 1. SAHIFA SOZLAMALARI (ASL DIZAYN)
+# 1. SAHIFA SOZLAMALARI
 st.set_page_config(
     page_title="Amudaryo AI-Monitor | Shahzod",
     page_icon="🛰",
@@ -64,42 +64,42 @@ locations = {"Urganch": [41.55, 60.63], "Nukus": [42.45, 59.60], "Termiz": [37.2
 selected_city = st.sidebar.selectbox("HUDUDNI TANLANG:", list(locations.keys()))
 radius = st.sidebar.slider("TAHLIL RADIUSI (M):", 1000, 15000, 5000)
 
-# --- 🧠 AQLLI TAHLIL (XATOLIKLARNI OLDINI OLUVCHI) ---
+# --- 🧠 AQLLI TAHLIL TIZIMI ---
 def analyze_river_system(coords, radius):
     try:
         point = ee.Geometry.Point(coords[1], coords[0])
         region = point.buffer(radius).bounds()
         
-        # 2024-2025 yillar oralig'idagi eng toza tasvirni olish
+        # 2024-2025 yillar oralig'idagi eng toza tasvir
         img = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED") \
                 .filterBounds(region) \
-                .filterDate('2024-01-01', '2025-12-31') \
-                .sort('CLOUDY_PIXEL_PERCENTAGE') \
+                .filterDate("2024-01-01", "2025-12-31") \
+                .sort("CLOUDY_PIXEL_PERCENTAGE") \
                 .first()
 
         if not img.getInfo(): return None
 
         # NDWI (Suv ko'rsatkichi)
-        ndwi = img.normalizedDifference(['B3', 'B8']).gt(0.0)
+        ndwi = img.normalizedDifference(["B3", "B8"]).gt(0.0)
         
         # Maydon hisobi
         area_px = ndwi.multiply(ee.Image.pixelArea()).reduceRegion(
             reducer=ee.Reducer.sum(), geometry=region, scale=30, maxPixels=1e9
         )
-        area_ha = ee.Number(area_px.get('nd', 0)).divide(10000).round().getInfo()
+        area_ha = ee.Number(area_px.get("nd", 0)).divide(10000).round().getInfo()
 
-        # Rasm URL (Thumbnail ruxsatini tekshirish bilan)
+        # Rasm URL
         try:
-            vis_url = img.visualize(bands=['B4', 'B3', 'B2'], min=0, max=3000).getThumbURL({'dimensions': 800, 'region': region, 'format': 'jpg'})
+            vis_url = img.visualize(bands=["B4", "B3", "B2"], min=0, max=3000).getThumbURL({"dimensions": 800, "region": region, "format": "jpg"})
         except:
-            vis_url = None # Rasm chiqmasa xato bermaydi
+            vis_url = None
 
         return vis_url, area_ha
     except Exception as e:
         return str(e)
 
 # --- 🚀 INTERFEYS ---
-st.markdown(f"<h1>🌊 AMUDARYO AI-DEFORMRISK PRO</h1>", unsafe_allow_html=True)
+st.markdown("<h1>🌊 AMUDARYO AI-DEFORMRISK PRO</h1>", unsafe_allow_html=True)
 
 with st.spinner("🛰 GEE serverlari bilan bog'lanilmoqda..."):
     results = analyze_river_system(locations[selected_city], radius)
@@ -113,26 +113,27 @@ if isinstance(results, tuple):
         if vis_url:
             st.image(vis_url, use_container_width=True, caption=f"Sun'iy yo'ldosh tasviri: {selected_city}")
         else:
-            st.warning("⚠️ Rasm generatsiya qilishda ruxsat yetishmadi, lekin hisob-kitoblar tayyor.")
+            st.warning("⚠️ Sun'iy yo'ldosh rasmini yuklashda ruxsat cheklovi. Hisob-kitoblar pastda ko'rsatilgan.")
     
     with col_side:
         st.markdown(f"""
             <div class='metric-card'>
-                <p>JORIY SUV MAYDONI</p>
+                <p>ANIQLANGAN SUV MAYDONI</p>
                 <h3>{area_ha} Gektar</h3>
             </div>
         """, unsafe_allow_html=True)
         
-        # Grafik
-        df = pd.DataFrame({'Ko'rsatkich': ['Suv Maydoni'], 'Qiymat': [area_ha]})
-        fig = px.bar(df, x='Ko'rsatkich', y='Qiymat', color_discrete_sequence=['#00f2ff'], template="plotly_dark")
+        # Xatoni to'g'irlash uchun ma'lumotlar to'plami
+        data = {"Kategoriya": ["Suv Maydoni"], "Gektar": [area_ha]}
+        df = pd.DataFrame(data)
+        fig = px.bar(df, x="Kategoriya", y="Gektar", color_discrete_sequence=["#00f2ff"], template="plotly_dark")
         st.plotly_chart(fig, use_container_width=True)
 
     st.markdown(f"""
     <div class="report-box-red">
         <h3 style='color: #ff4b4b;'>⚠️ ANALIZ XULOSASI</h3>
-        <p><b>{selected_city}</b> hududida sun'iy yo'ldosh tahlili muvaffaqiyatli yakunlandi. 
-        Aniqlangan suv sathi maydoni: <b>{area_ha} ga</b>. Ruxsatlar to'liq faollashgach, grafik o'zgarishlar ham qo'shiladi.</p>
+        <p><b>{selected_city}</b> hududida sun'iy yo'ldosh tahlili yakunlandi. 
+        Daryo suv maydoni: <b>{area_ha} ga</b> ekanligi aniqlandi.</p>
         <p style="font-size: 0.8rem; opacity: 0.7;">Tizim: Amudaryo AI v2.2 | Muallif: Shahzod</p>
     </div>
     """, unsafe_allow_html=True)
