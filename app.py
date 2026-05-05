@@ -83,26 +83,36 @@ current_year = datetime.now().year
 past_year = current_year - 7
 future_year = current_year + 5
 
-# --- 🧠 INTEGRATSIYALASHGAN ANALIZ ALGORITMI (PRO MAX TUZATISH) ---
+# --- 🧠 INTEGRATSIYALASHGAN ANALIZ ALGORITMI (TUROV VA XATOLIKLARNI DAVOLASH) ---
 def analyze_full_spectrum(geometry):
     try:
-        # 1. Hududning geometriyasini aniqlash (To'rtburchak hududni kafolatlash)
-        region_ee = geometry.bounds() 
+        # 1. Hudud geometriyasini olish
+        region_ee = geometry.bounds()
         
+        # 2. Maydonni hisoblash (km2)
+        area_km2 = geometry.area().divide(1e6).getInfo()
+        
+        # 3. DINAMIK MASSHTAB (Bu "Total request size" xatosini yo'qotadi)
+        if area_km2 < 10:
+            current_scale = 10
+        elif area_km2 < 50:
+            current_scale = 30
+        else:
+            current_scale = 60 
+
         def fetch_img(year):
             col = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED") \
                 .filterBounds(region_ee) \
                 .filterDate(f'{year}-01-01', f'{year}-12-31') \
                 .sort('CLOUDY_PIXEL_PERCENTAGE')
             img = col.first()
-            # Hududni kesib olishda faqat chizilgan joyni olamiz
             return img.clip(region_ee) if img else None
 
         img_old = fetch_img(past_year)
         img_now = fetch_img(current_year)
         
         if img_old is None or img_now is None:
-            return "NO_IMAGE"
+            return "Tanlangan yillar uchun sun'iy yo'ldosh tasviri topilmadi."
 
         # NDWI - Suv maskasi
         mask_old = img_old.normalizedDifference(['B3', 'B8']).gt(0.1)
@@ -110,13 +120,13 @@ def analyze_full_spectrum(geometry):
 
         # O'pirilish va Xavf zonalari
         erosion = mask_now.subtract(mask_old).gt(0.1).selfMask()
-        future_risk = mask_now.focal_max(radius=350, units='meters').subtract(mask_now).gt(0.1).selfMask()
+        future_risk = mask_now.focal_max(radius=300, units='meters').subtract(mask_now).gt(0.1).selfMask()
 
-        # Maydonlarni hisoblash (Scale 10m - aniqlik uchun)
+        # Maydonlarni hisoblash
         def calc_area(m):
             try:
                 area = m.multiply(ee.Image.pixelArea()).reduceRegion(
-                    reducer=ee.Reducer.sum(), geometry=region_ee, scale=10, maxPixels=1e9
+                    reducer=ee.Reducer.sum(), geometry=region_ee, scale=30, maxPixels=1e9
                 )
                 val = area.get('nd')
                 return int(ee.Number(ee.Algorithms.If(val, val, 0)).divide(10000).round().getInfo())
@@ -126,14 +136,13 @@ def analyze_full_spectrum(geometry):
         a_ero = calc_area(erosion)
         a_fut = int(a_now * 1.10) 
 
-        # --- 🖼 VIZUALIZATSIYA TUZATISHI ---
+        # --- 🖼 VIZUALIZATSIYA (RASM HAJMINI NAZORAT QILISH) ---
         vis = {'bands': ['B4', 'B3', 'B2'], 'min': 0, 'max': 3500, 'gamma': 1.4}
         region_coords = region_ee.getInfo()['coordinates']
         
-        # 'dimensions' o'rniga 'scale' ishlatamiz, shunda rasm markazlashgan va to'liq chiqadi
         v_params = {
             'region': region_coords,
-            'scale': 10, 
+            'dimensions': 1024, # Maksimal rasm o'lchami xatolikni oldini oladi
             'format': 'png'
         }
         
@@ -144,7 +153,7 @@ def analyze_full_spectrum(geometry):
         return url1, url2, url3, a_old, a_now, a_fut, a_ero
             
     except Exception as e:
-        return f"XATOLIK: {str(e)}"
+        return f"XATOLIK YUZ BERDI: {str(e)}"
 
 # --- 🚀 ASOSIY EKRAN ---
 st.markdown("<h1>🌊 AMUDARYO AI-DEFORMRISK MONITOR PRO</h1>", unsafe_allow_html=True)
