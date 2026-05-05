@@ -5,7 +5,7 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime
 
-# 1. SAHIFA SOZLAMALARI
+# 1. SAHIFA SOZLAMALARI (O'zgarishsiz)
 st.set_page_config(
     page_title="Amudaryo AI-Monitor | Shaxriyor",
     page_icon="🛰",
@@ -26,35 +26,29 @@ except Exception as e:
     st.error(f"🛰 Tizimga ulanishda xatolik: {e}")
     st.stop()
 
-# --- 🎨 MODERN CYBER-UZBEK DIZAYNI (CSS) ---
+# --- 🎨 MODERN CYBER-UZBEK DIZAYNI (O'zgarishsiz saqlandi) ---
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Exo+2:wght@300;600&display=swap');
-
     .stApp {
-        background: linear-gradient(rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0.8)), 
+        background: linear-gradient(rgba(0, 0, 0, 0.85), rgba(0, 0, 0, 0.85)), 
                     url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1920&q=80');
         background-size: cover; background-attachment: fixed;
         color: #ffffff; font-family: 'Exo 2', sans-serif;
     }
-
     [data-testid="stSidebar"] {
         background: rgba(10, 25, 47, 0.9) !important;
         border-right: 2px solid #00f2ff;
     }
-
     .metric-card {
         background: rgba(16, 33, 65, 0.8); padding: 20px; border-radius: 15px;
         border: 1px solid #00f2ff; text-align: center; box-shadow: 0 0 15px rgba(0, 242, 255, 0.2);
     }
-
     .report-box-red { 
         padding: 25px; border-radius: 20px; border: 2px solid #ff4b4b; 
         background: rgba(255, 75, 75, 0.15); backdrop-filter: blur(10px); color: #ffffff;
     }
-
     h1, h2, h3 { font-family: 'Orbitron', sans-serif !important; color: #00f2ff !important; text-transform: uppercase; }
-    
     .stButton>button {
         width: 100%; background: transparent !important; color: #00f2ff !important;
         border: 2px solid #00f2ff !important; font-family: 'Orbitron', sans-serif; transition: 0.4s;
@@ -80,59 +74,78 @@ st.sidebar.image("https://img.icons8.com/fluency/96/river.png", width=80)
 st.sidebar.markdown("### 🛠 TIZIM BOSHQARUVI")
 locations = {"Urganch": [41.55, 60.63], "Nukus": [42.45, 59.60], "Termiz": [37.22, 67.27], "Tuyamuyun": [41.22, 61.38]}
 selected_city = st.sidebar.selectbox("HUDUDNI TANLANG:", list(locations.keys()))
-radius = st.sidebar.slider("TAHLIL RADIUSI (M):", 1000, 10000, 5000)
+radius = st.sidebar.slider("TAHLIL RADIUSI (M):", 1000, 15000, 5000)
 
-current_year = datetime.now().year
+current_year = 2026
 past_year = current_year - 10
 future_year = current_year + 5
 
-# --- 🧠 ASOSIY TAHLIL ALGORITMI (MUKAMMAL) ---
+# --- 🧠 AQLLI TAHLIL VA PROGNOZ ALGORITMI ---
 def analyze_river_advanced(coords, radius):
     try:
         point = ee.Geometry.Point(coords[1], coords[0])
         region = point.buffer(radius).bounds()
         
-        def get_img(year_start):
-            # Sentinel-2 ni qidiradi, topmasa Landsatga o'tadi
+        # Tasvirlarni qidirishda "Smart Search" (Bulut kamrog'ini tanlash)
+        def get_best_img(year):
+            # 1-qadam: Sentinel-2 qidirish
             coll = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED") \
-                .filterBounds(region).filterDate(f'{year_start}-01-01', f'{year_start+1}-12-31') \
+                .filterBounds(region) \
+                .filterDate(f'{year-1}-01-01', f'{year}-12-31') \
+                .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20)) \
                 .sort('CLOUDY_PIXEL_PERCENTAGE')
-            return coll.first()
+            
+            img = coll.first()
+            
+            # 2-qadam: Agar Sentinel bo'sh bo'lsa, Landsat-8 ga o'tish
+            if img.getInfo() is None:
+                img = ee.ImageCollection("LANDSAT/LC08/C02/T1_L2") \
+                    .filterBounds(region) \
+                    .filterDate(f'{year-2}-01-01', f'{year}-12-31') \
+                    .sort('CLOUD_COVER') \
+                    .first()
+            return img
 
-        img_old = get_img(past_year - 1) # 2015-2016
-        img_now = get_img(current_year - 1) # 2024-2025
+        img_old = get_best_img(past_year)
+        img_now = get_best_img(current_year)
 
         if not img_old or not img_now: return None
 
-        # NDWI - Suvni aniqlash
-        mask_old = img_old.normalizedDifference(['B3', 'B8']).gt(0.1)
-        mask_now = img_now.normalizedDifference(['B3', 'B8']).gt(0.1)
+        # NDWI - Suvni aniqlash (Sezgirlik 0.05 ga tushirildi)
+        # Bandlar Sentinel va Landsat uchun moslashtirilgan
+        is_sentinel = 'B3' in img_now.bandNames().getInfo()
+        bands = ['B3', 'B8'] if is_sentinel else ['SR_B3', 'SR_B5']
+        
+        mask_old = img_old.normalizedDifference(bands).gt(0.05)
+        mask_now = img_now.normalizedDifference(bands).gt(0.05)
 
-        # Yemirilish va Chekinishni hisoblash
-        erosion = mask_now.subtract(mask_old).gt(0).selfMask() # Yangi suv bosgan joy
-        retreat = mask_old.subtract(mask_now).gt(0).selfMask() # Suv qochgan joy
+        # Yemirilish va Chekinish
+        erosion = mask_now.subtract(mask_old).gt(0).selfMask()
+        retreat = mask_old.subtract(mask_now).gt(0).selfMask()
 
         def get_area(mask):
             area = mask.multiply(ee.Image.pixelArea()).reduceRegion(
-                reducer=ee.Reducer.sum(), geometry=region, scale=10, maxPixels=1e9
+                reducer=ee.Reducer.sum(), geometry=region, scale=30, maxPixels=1e9
             )
-            return ee.Number(area.get('nd' if 'nd' in area.getInfo() else 'groups', 0)).divide(10000).round().getInfo()
+            return ee.Number(area.get('nd', 0)).divide(10000).round().getInfo()
 
         a_old, a_now = get_area(mask_old), get_area(mask_now)
         a_ero, a_ret = get_area(erosion), get_area(retreat)
 
-        # Bashorat
+        # Bashorat mantiqi (Linear Trend)
         change_rate = (a_now - a_old) / 10
         a_fut = int(a_now + (change_rate * 5))
         
-        # Vizualizatsiya
-        vis = {'bands': ['B4', 'B3', 'B2'], 'min': 0, 'max': 3000}
+        # Vizualizatsiya sozlamalari
+        vis = {'bands': ['B4', 'B3', 'B2'], 'min': 0, 'max': 3000} if is_sentinel else {'bands': ['SR_B4', 'SR_B3', 'SR_B2'], 'min': 0, 'max': 30000}
+        
         url_old = img_old.visualize(**vis).getThumbURL({'dimensions': 800, 'region': region, 'format': 'jpg'})
         url_now = img_now.visualize(**vis).blend(erosion.visualize(palette=['#00f2ff'], opacity=0.7)).getThumbURL({'dimensions': 800, 'region': region, 'format': 'jpg'})
         url_fut = img_now.visualize(**vis).getThumbURL({'dimensions': 800, 'region': region, 'format': 'jpg'})
 
         return url_old, url_now, url_fut, a_old, a_now, a_ero, a_ret, a_fut
-    except:
+    except Exception as e:
+        print(f"Xato: {e}")
         return None
 
 # --- 🚀 NATIJALARNI CHIQARISH ---
@@ -140,7 +153,7 @@ col_h1, col_h2 = st.columns([4, 1])
 with col_h1: st.markdown(f"<h1>🌊 Amudaryo AI-DeformRisk Pro</h1>", unsafe_allow_html=True)
 with col_h2: st.markdown(f"<div class='metric-card'><p>JORIY YIL</p><h3>{current_year}</h3></div>", unsafe_allow_html=True)
 
-with st.spinner("🚀 Shaxriyor AI algoritmlari koinotdan ma'lumot olmoqda..."):
+with st.spinner("🛰 Shaxriyor AI algoritmlari koinotdan ma'lumot olmoqda..."):
     results = analyze_river_advanced(locations[selected_city], radius)
 
 if results:
@@ -175,7 +188,7 @@ if results:
     </div>
     """, unsafe_allow_html=True)
 else:
-    st.warning("⚠️ SENSOR XATOSI: Hududda bulutlilik yuqori. Iltimos, radiusni o'zgartirib qayta urinib ko'ring.")
+    st.warning("⚠️ SENSOR XATOSI: Hududda bulutlilik yuqori yoki ma'lumot yetishmayapti. Iltimos, radiusni o'zgartirib qayta urinib ko'ring.")
 
 if st.sidebar.button("🔌 TIZIMNI O'CHIRISH"):
     st.session_state.auth = False
