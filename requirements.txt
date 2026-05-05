@@ -3,3 +3,5 @@ earthengine-api
 pandas
 plotly
 geemap
+streamlit-folium
+folium
