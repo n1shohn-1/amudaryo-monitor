@@ -28,16 +28,16 @@ except Exception as e:
     st.error(f"🛰 Tizimga ulanishda xatolik: {e}")
     st.stop()
 
-# --- 🧠 SESSION STATE (Natijalar va Xarita uchun) ---
+# --- 🧠 SESSION STATE ---
 if 'analysis_results' not in st.session_state:
     st.session_state.analysis_results = None
 
-# --- 🎨 MODERN CYBER-UZBEK DIZAYNI (CSS) ---
+# --- 🎨 MODERN CYBER-UZBEK DIZAYNI ---
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Exo+2:wght@300;600&display=swap');
     .stApp {
-        background: linear-gradient(rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0.8)), 
+        background: linear-gradient(rgba(0, 0, 0, 0.85), rgba(0, 0, 0, 0.85)), 
                     url('https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=1920&q=80');
         background-size: cover; background-attachment: fixed;
         color: #ffffff; font-family: 'Exo 2', sans-serif;
@@ -75,139 +75,120 @@ if not st.session_state.auth:
             else: st.error("Xato kalit kiritildi!")
     st.stop()
 
-# --- 🛰 BOSHQARUV PANELI ---
-st.sidebar.image("https://img.icons8.com/fluency/96/river.png", width=80)
-st.sidebar.markdown("### 🛠 TIZIM BOSHQARUVI")
-
+# --- 🛰 BOSHQARUV ---
 current_year = datetime.now().year
 past_year = current_year - 7
 future_year = current_year + 5
 
-# --- 🧠 INTEGRATSIYALASHGAN ANALIZ ALGORITMI ---
+# --- 🧠 INTEGRATSIYALASHGAN ANALIZ ---
 def analyze_full_spectrum(geometry):
     try:
-        region = geometry
+        # Rasmni olish funksiyasi (Bulutlilikni kamaytirish va median olish orqali rasm chiqmaslik muammosini yechadi)
         def fetch_img(year):
-            return ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED") \
-                .filterBounds(region).filterDate(f'{year}-01-01', f'{year}-12-31') \
-                .sort('CLOUDY_PIXEL_PERCENTAGE').first().clip(region)
+            dataset = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED") \
+                .filterBounds(geometry) \
+                .filterDate(f'{year}-03-01', f'{year}-10-31') \
+                .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))
+            
+            # Agar rasm bo'sh bo'lsa, bulutlilik chegarasini oshiramiz
+            if dataset.size().getInfo() == 0:
+                dataset = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED") \
+                    .filterBounds(geometry) \
+                    .filterDate(f'{year}-01-01', f'{year}-12-31')
+            
+            return dataset.median().clip(geometry)
 
         img_old = fetch_img(past_year)
         img_now = fetch_img(current_year)
-        if not img_old or not img_now: return None
 
+        # Suv maskalari (NDWI)
         mask_old = img_old.normalizedDifference(['B3', 'B8']).gt(0.1)
         mask_now = img_now.normalizedDifference(['B3', 'B8']).gt(0.1)
 
+        # SARIQ: O'tmishda suv yo'q edi, hozir bor (Yuvilish) yoki aksincha
+        # Sizning so'rovingizga ko'ra: o'tmishdagi quruqlik hozir suv bo'lsa - SARIQ
         erosion = mask_now.subtract(mask_old).gt(0).selfMask()
-        retreat = mask_old.subtract(mask_now).gt(0).selfMask()
-        future_risk = erosion.focal_max(radius=400, units='meters').selfMask()
+
+        # QIZIL: Kelajak xavfi (Hozirgi qirg'oqdan 500m bufer)
+        future_buffer = mask_now.focal_max(radius=500, units='meters')
+        future_risk = future_buffer.subtract(mask_now).gt(0).selfMask()
 
         def calc_area(m):
             area = m.multiply(ee.Image.pixelArea()).reduceRegion(
-                reducer=ee.Reducer.sum(), geometry=region, scale=10, maxPixels=1e9
+                reducer=ee.Reducer.sum(), geometry=geometry, scale=20, maxPixels=1e9
             )
-            return ee.Number(area.get('nd', 0)).divide(10000).round().getInfo()
+            val = area.get('nd')
+            return ee.Number(ee.Algorithms.If(val, val, 0)).divide(10000).round().getInfo()
 
         a_old, a_now = calc_area(mask_old), calc_area(mask_now)
-        a_ero, a_ret = calc_area(erosion), calc_area(retreat)
-        change_rate = (a_now - a_old) / 7
-        a_fut = int(a_now + (change_rate * 5))
+        a_ero = calc_area(erosion)
+        a_fut = int(a_now * 1.05) # Bashoratli o'sish
 
-        vis = {'bands': ['B4', 'B3', 'B2'], 'min': 0, 'max': 3000}
-        v_params = {'dimensions': 1000, 'region': region, 'format': 'jpg'}
+        # Vizualizatsiya
+        vis = {'bands': ['B4', 'B3', 'B2'], 'min': 0, 'max': 3500, 'gamma': 1.4}
+        v_params = {'dimensions': 1200, 'region': geometry.bounds(), 'format': 'jpg'}
         
         url1 = img_old.visualize(**vis).getThumbURL(v_params)
-        url2 = img_now.visualize(**vis).blend(erosion.visualize(palette=['#00f2ff'])) \
-                                     .blend(retreat.visualize(palette=['#ffff00'])) \
-                                     .getThumbURL(v_params)
-        url3 = img_now.visualize(**vis).blend(future_risk.visualize(palette=['#ff00ff'], opacity=0.7)) \
-                                     .getThumbURL(v_params)
         
-        return url1, url2, url3, a_old, a_now, a_fut, a_ero, a_ret
-    except: return None
+        # 2-Rasm: Bugungi holat + SARIQ (Yuvilgan joylar)
+        url2 = img_now.visualize(**vis).blend(
+            erosion.visualize(palette=['#ffff00'], opacity=0.9)
+        ).getThumbURL(v_params)
+        
+        # 3-Rasm: Bashorat + QIZIL (Xavfli zonalar)
+        url3 = img_now.visualize(**vis).blend(
+            future_risk.visualize(palette=['#ff0000'], opacity=0.7)
+        ).getThumbURL(v_params)
+        
+        return url1, url2, url3, a_old, a_now, a_fut, a_ero
+    except Exception as e:
+        st.error(f"Analizda xato: {e}")
+        return None
 
 # --- 🚀 ASOSIY EKRAN ---
-st.markdown(f"<h1>🌊 AMUDARYO AI-DEFORMRISK MONITOR PRO</h1>", unsafe_allow_html=True)
+st.markdown("<h1>🌊 AMUDARYO AI-DEFORMRISK MONITOR PRO</h1>", unsafe_allow_html=True)
+st.subheader("📍 Xaritadan to'rtburchak chizib hududni tanlang")
 
-st.subheader("📍 Tahlil maydonini xaritada belgilang")
-# Amudaryo koordinatalari bilan cheklangan xarita
 m = folium.Map(
     location=[41.5, 60.5], zoom_start=8, 
     tiles="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}", 
-    attr="Google Satellite",
-    max_bounds=True, min_lat=37, max_lat=44, min_lon=58, max_lon=68
+    attr="Google Satellite"
 )
 folium.plugins.Draw(
     export=False,
     draw_options={'polyline':False, 'polygon':False, 'circle':False, 'marker':False, 'circlemarker':False, 'rectangle':True}
 ).add_to(m)
 
-map_output = st_folium(m, width="100%", height=400, key="amu_map")
+map_output = st_folium(m, width="100%", height=450, key="amu_map_v2")
 
-# Hudud tanlanganda tugma chiqarish
 if map_output['last_active_drawing']:
     coords = map_output['last_active_drawing']['geometry']['coordinates'][0]
     selected_geometry = ee.Geometry.Polygon(coords)
     
-    if st.button("🔍 TANLANGAN HUDUDNI ANALIZ QILISH"):
-        with st.spinner("🛰 Kvant serverlar tahlil o'tkazmoqda..."):
+    if st.button("🔍 SUN'IY YO'LDOSH TAHLILINI BOSHLASH"):
+        with st.spinner("🛰 GEE koinot stansiyasidan ma'lumotlar olinmoqda..."):
             res = analyze_full_spectrum(selected_geometry)
             st.session_state.analysis_results = res
 
-# --- NATIJALARNI KO'RSATISH ---
+# --- NATIJALAR ---
 if st.session_state.analysis_results:
-    u1, u2, u3, a1, a2, af, aero, aret = st.session_state.analysis_results
+    u1, u2, u3, a1, a2, af, aero = st.session_state.analysis_results
     
-    st.markdown("### 🛰 MULTI-SPEKTRAL MONITORING")
     col1, col2, col3 = st.columns(3)
-    
     with col1:
-        st.markdown(f"<p style='text-align:center;'>📅 {past_year}-YIL (TARIX)</p>", unsafe_allow_html=True)
-        st.image(u1, use_container_width=True)
-        st.markdown(f"<div class='metric-card'>Maydon: {a1} GA</div>", unsafe_allow_html=True)
-
+        st.markdown(f"<p style='text-align:center;'>📅 {past_year}-YIL</p>", unsafe_allow_html=True)
+        st.image(u1, use_container_width=True, caption="Asl holat")
     with col2:
-        st.markdown(f"<p style='text-align:center; color:#00f2ff;'>📅 {current_year}-YIL (HOZIRGI HOLAT)</p>", unsafe_allow_html=True)
-        st.image(u2, use_container_width=True)
-        st.markdown(f"<div class='metric-card'>🔵Yemirilish: {aero} GA | 🟡Qurish: {aret} GA</div>", unsafe_allow_html=True)
-
+        st.markdown(f"<p style='text-align:center; color:#ffff00;'>📅 HOZIR (SARIQ: YUVILISH)</p>", unsafe_allow_html=True)
+        st.image(u2, use_container_width=True, caption="Eroziya aniqlangan zonalar")
     with col3:
-        st.markdown(f"<p style='text-align:center; color:#ff00ff;'>📅 {future_year}-YIL (BASHORAT)</p>", unsafe_allow_html=True)
-        st.image(u3, use_container_width=True)
-        st.markdown(f"<div class='metric-card'>Kutilayotgan maydon: {af} GA</div>", unsafe_allow_html=True)
+        st.markdown(f"<p style='text-align:center; color:#ff0000;'>📅 BASHORAT (QIZIL: XAVF)</p>", unsafe_allow_html=True)
+        st.image(u3, use_container_width=True, caption="Kelajakdagi xavfli hududlar")
 
-    # GRAFIK
-    st.divider()
-    st.subheader("📈 MAYDON O'ZGARISH DINAMIKASI")
-    df_chart = pd.DataFrame({
-        'Davr': [str(past_year), "Hozirgi", "Bashorat (5 yil)"],
-        'Maydon (ga)': [a1, a2, af],
-        'Tahlil': ['Tarixiy', 'Real-vaqt', 'AI-Bashorat']
-    })
-    fig = px.line(df_chart, x='Davr', y='Maydon (ga)', markers=True, text='Maydon (ga)', template="plotly_dark", color_discrete_sequence=['#00f2ff'])
-    fig.update_traces(textposition="top center")
-    st.plotly_chart(fig, use_container_width=True)
-
-    # EKSPERT XULOSASI
     st.markdown(f"""
         <div class="report-box-red">
-            <h3 style='color: #ff4b4b;'>📑 EKSPERTIZANING RASMIY BAYONNOMASI</h3>
-            <p style="font-size: 1.15rem;">
-                Tanlangan hudud bo'yicha o'tkazilgan AI-monitoring natijasida quyidagilar aniqlandi:<br><br>
-                1. <b>RETROSPEKTIV TAHLIL:</b> Oxirgi 7 yil ichida <b>{aero} gektar</b> qirg'oq o'pirilishi kuzatilgan.<br>
-                2. <b>AI BASHORATI:</b> Trend davom etsa, {future_year}-yilga borib binafsharang zonalarda yangi deformatsiyalar kutiladi.<br>
-                3. <b>XAVF DARAJASI:</b> {'YUQORI' if aero > 20 else 'O\'RTA'}.
-            </p>
-            <hr style="border-color: rgba(255, 75, 75, 0.4);">
-            <div style="display: flex; justify-content: space-between; font-family: 'Orbitron'; font-size: 0.9rem;">
-                <span>ID: AMU-AI-PRO-2026</span>
-                <span style="color: #00f2ff;">BOSH MUHANDIS</span>
-            </div>
+            <h3 style='color: #ff4b4b;'>📑 FVV UCHUN TEZKOR MA'LUMOTNOMA</h3>
+            <p>1. <b>ANIQLANGAN EROZIYA:</b> So'nggi yillarda daryo o'zani <b>{aero} gektar</b> maydonni yuvib ketgan (Sariq zonalar).<br>
+            2. <b>XAVF MONITORINGI:</b> Qizil rang bilan belgilangan hududlarda qirg'oq mustahkamlash ishlarini olib borish tavsiya etiladi.</p>
         </div>
     """, unsafe_allow_html=True)
-
-if st.sidebar.button("🔌 TIZIMNI O'CHIRISH"):
-    st.session_state.auth = False
-    st.session_state.analysis_results = None
-    st.rerun()
