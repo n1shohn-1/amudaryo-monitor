@@ -7,7 +7,7 @@ from datetime import datetime
 
 # 1. SAHIFA SOZLAMALARI
 st.set_page_config(
-    page_title="Amudaryo AI-DeformRisk | Shahzod",
+    page_title="Amudaryo AI-DeformRisk | Shaxriyor",
     page_icon="🛰",
     layout="wide",
     initial_sidebar_state="expanded"
