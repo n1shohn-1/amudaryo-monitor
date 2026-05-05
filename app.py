@@ -83,21 +83,20 @@ current_year = datetime.now().year
 past_year = current_year - 7
 future_year = current_year + 5
 
-# --- 🧠 INTEGRATSIYALASHGAN ANALIZ ALGORITMI (TUZATILGAN) ---
+# --- 🧠 INTEGRATSIYALASHGAN ANALIZ ALGORITMI (PRO MAX TUZATISH) ---
 def analyze_full_spectrum(geometry):
     try:
-        # Hudud o'lchami va markazni to'g'irlash
-        bound_box = geometry.bounds()
-        area_km2 = geometry.area().divide(1e6).getInfo()
-        scale_val = 20 if area_km2 < 50 else 50 
-
+        # 1. Hududning geometriyasini aniqlash (To'rtburchak hududni kafolatlash)
+        region_ee = geometry.bounds() 
+        
         def fetch_img(year):
             col = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED") \
-                .filterBounds(geometry) \
+                .filterBounds(region_ee) \
                 .filterDate(f'{year}-01-01', f'{year}-12-31') \
                 .sort('CLOUDY_PIXEL_PERCENTAGE')
             img = col.first()
-            return img.clip(bound_box) if img else None # Bound box bilan qirqish markazlashtiradi
+            # Hududni kesib olishda faqat chizilgan joyni olamiz
+            return img.clip(region_ee) if img else None
 
         img_old = fetch_img(past_year)
         img_now = fetch_img(current_year)
@@ -109,16 +108,15 @@ def analyze_full_spectrum(geometry):
         mask_old = img_old.normalizedDifference(['B3', 'B8']).gt(0.1)
         mask_now = img_now.normalizedDifference(['B3', 'B8']).gt(0.1)
 
-        # 1. SARIQ ZONA: O'pirilish
+        # O'pirilish va Xavf zonalari
         erosion = mask_now.subtract(mask_old).gt(0.1).selfMask()
-
-        # 2. QIZIL ZONA: Xavf
         future_risk = mask_now.focal_max(radius=350, units='meters').subtract(mask_now).gt(0.1).selfMask()
 
+        # Maydonlarni hisoblash (Scale 10m - aniqlik uchun)
         def calc_area(m):
             try:
                 area = m.multiply(ee.Image.pixelArea()).reduceRegion(
-                    reducer=ee.Reducer.sum(), geometry=geometry, scale=scale_val, maxPixels=1e9
+                    reducer=ee.Reducer.sum(), geometry=region_ee, scale=10, maxPixels=1e9
                 )
                 val = area.get('nd')
                 return int(ee.Number(ee.Algorithms.If(val, val, 0)).divide(10000).round().getInfo())
@@ -128,24 +126,25 @@ def analyze_full_spectrum(geometry):
         a_ero = calc_area(erosion)
         a_fut = int(a_now * 1.10) 
 
-        # Vizualizatsiya (Center alignment fix)
+        # --- 🖼 VIZUALIZATSIYA TUZATISHI ---
         vis = {'bands': ['B4', 'B3', 'B2'], 'min': 0, 'max': 3500, 'gamma': 1.4}
-        export_region = bound_box.getInfo()['coordinates']
+        region_coords = region_ee.getInfo()['coordinates']
         
+        # 'dimensions' o'rniga 'scale' ishlatamiz, shunda rasm markazlashgan va to'liq chiqadi
         v_params = {
-            'dimensions': 800, 
-            'region': export_region, 
-            'format': 'jpg'
+            'region': region_coords,
+            'scale': 10, 
+            'format': 'png'
         }
         
         url1 = img_old.visualize(**vis).getThumbURL(v_params)
-        url2 = img_now.visualize(**vis).blend(erosion.visualize(palette=['#ffff00'], opacity=0.8)).getThumbURL(v_params)
-        url3 = img_now.visualize(**vis).blend(future_risk.visualize(palette=['#ff0000'], opacity=0.7)).getThumbURL(v_params)
+        url2 = img_now.visualize(**vis).blend(erosion.visualize(palette=['#ffff00'], opacity=1.0)).getThumbURL(v_params)
+        url3 = img_now.visualize(**vis).blend(future_risk.visualize(palette=['#ff0000'], opacity=0.8)).getThumbURL(v_params)
         
         return url1, url2, url3, a_old, a_now, a_fut, a_ero
             
     except Exception as e:
-        return f"GENERAL_ERROR: {e}"
+        return f"XATOLIK: {str(e)}"
 
 # --- 🚀 ASOSIY EKRAN ---
 st.markdown("<h1>🌊 AMUDARYO AI-DEFORMRISK MONITOR PRO</h1>", unsafe_allow_html=True)
@@ -169,7 +168,7 @@ if st.session_state.analysis_results:
     res = st.session_state.analysis_results
     
     if isinstance(res, str):
-        st.error(f"❌ Xatolik: {res}")
+        st.error(f"❌ {res}")
     else:
         u1, u2, u3, a1, a2, af, aero = res
         
@@ -197,7 +196,7 @@ if st.session_state.analysis_results:
         fig = px.line(df_chart, x='Davr', y='Maydon (ga)', markers=True, template="plotly_dark", color_discrete_sequence=['#00f2ff'])
         st.plotly_chart(fig, use_container_width=True)
 
-        # 📑 DINAMIK EKSPERT XULOSASI (YANGILANGAN)
+        # 📑 DINAMIK EKSPERT XULOSASI
         risk_color = "#ff4b4b" if aero > 20 else "#00f2ff"
         risk_text = "YUQORI" if aero > 20 else "O'RTA" if aero > 5 else "BARQAROR"
         
@@ -215,7 +214,7 @@ if st.session_state.analysis_results:
                 <p style="font-size: 1.15rem;">
                     Tizim tahliliga ko'ra, tanlangan hududda xavf darajasi: <b style="color:{risk_color};">{risk_text}</b>. <br><br>
                     <b>Analiz natijasi:</b> Oxirgi 7 yil ichida daryo qirg'og'ining <b>{aero} gektar</b> qismi o'pirilgan. 
-                    Kelajakda daryoning o'ng va chap qirg'oqlaridagi qizil zonalar suv ostida qolish ehtimoli 85% ni tashkil etadi.
+                    Kelajakda daryoning qizil zonalari suv ostida qolish ehtimoli yuqori.
                 </p>
                 <p style="font-size: 1.1rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px;">
                     <b>💡 Ekspert tavsiyasi:</b> {advice}
