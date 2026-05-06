@@ -9,7 +9,7 @@ from streamlit_folium import st_folium
 
 # 1. SAHIFA SOZLAMALARI
 st.set_page_config(
-    page_title="Amudaryo AI-Predictor Pro",
+    page_title="Amudaryo o'zanidagi Favqulodda vaziyatlardagi o'zgarishlar (AI-Predictor Pro) taxlili",
     page_icon="🛰",
     layout="wide",
     initial_sidebar_state="expanded"
