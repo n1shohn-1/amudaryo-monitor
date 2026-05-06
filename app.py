@@ -9,7 +9,7 @@ from streamlit_folium import st_folium
 
 # 1. SAHIFA SOZLAMALARI
 st.set_page_config(
-    page_title="Amudaryo o'zanidagi Favqulodda vaziyatlardagi o'zgarishlar (AI-Predictor Pro) taxlili",
+    page_title="Amudaryo AI-Predictor Pro",
     page_icon="🛰",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -86,7 +86,7 @@ future_year = current_year + 5
 # --- 🧠 MUKAMMAL ANALIZ ALGORITMI ---
 def analyze_full_spectrum(geometry):
     try:
-        region_ee = geometry # Polygon obyektining o'zi
+        region_ee = geometry
         area_km2 = geometry.area().divide(1e6).getInfo()
         calc_scale = 10 if area_km2 < 5 else 30
 
@@ -104,7 +104,7 @@ def analyze_full_spectrum(geometry):
         if img_old is None or img_now is None:
             return "Tanlangan hudud uchun sun'iy yo'ldosh tasvirlari topilmadi."
 
-        # Suv maskalari
+        # Suv maskalari va tahlili
         mask_old = img_old.normalizedDifference(['B3', 'B8']).gt(0.05)
         mask_now = img_now.normalizedDifference(['B3', 'B8']).gt(0.05)
         erosion = mask_old.And(mask_now.Not()).selfMask()
@@ -125,15 +125,11 @@ def analyze_full_spectrum(geometry):
         a_old = calc_area(mask_old)
         a_now = calc_area(mask_now)
         a_ero = calc_area(erosion)
-        a_fut = int(a_now * 1.15) # Bashorat mantiqi biroz dinamiklashtirildi
+        a_fut = int(a_now * 1.15) 
 
-        # --- 🖼 VIZUALIZATSIYA SOZLAMALARI (SCALE QO'SHILDI) ---
+        # VIZUALIZATSIYA
         vis = {'bands': ['B4', 'B3', 'B2'], 'min': 0, 'max': 3000, 'gamma': 1.4}
-        v_params = {
-            'region': region_ee, # 'region_ee' obyekti to'g'ridan-to'g'ri berildi
-            'scale': 30,         # Piksel aniqligi - rasmlar yarim chala chiqmasligi uchun
-            'format': 'png'
-        }
+        v_params = {'region': region_ee.bounds(), 'scale': 30, 'format': 'png'}
         
         url1 = img_old.visualize(**vis).getThumbURL(v_params)
         url2 = img_now.visualize(**vis).blend(erosion.visualize(palette=['#ffff00'], opacity=1.0)).getThumbURL(v_params)
@@ -152,13 +148,23 @@ m = folium.Map(location=[41.5, 60.5], zoom_start=8, tiles="https://mt1.google.co
 folium.plugins.Draw(export=False, draw_options={'polyline':False, 'polygon':False, 'circle':False, 'marker':False, 'circlemarker':False, 'rectangle':True}).add_to(m)
 map_output = st_folium(m, width="100%", height=400, key="amu_map")
 
+# --- 🔍 TAHLILNI ISHGA TUSHIRISH (TO'G'RILANGAN QISM) ---
 if map_output['last_active_drawing']:
     if st.button("🔍 TANLANGAN HUDUDNI ANALIZ QILISH"):
         with st.spinner("🛰 Kvant serverlar tahlil o'tkazmoqda..."):
-            coords = map_output['last_active_drawing']['geometry']['coordinates'][0]
-            res = analyze_full_spectrum(ee.Geometry.Polygon(coords))
-            st.session_state.analysis_results = res
+            try:
+                # Koordinatalarni GEE Polygoniga aylantirish
+                raw_coords = map_output['last_active_drawing']['geometry']['coordinates'][0]
+                region_ee = ee.Geometry.Polygon(raw_coords)
+                
+                # Natijalarni tahlil qilish va session_state'ga saqlash
+                res = analyze_full_spectrum(region_ee)
+                st.session_state.analysis_results = res
+                st.rerun() # Natijani ko'rsatish uchun sahifani yangilash
+            except Exception as e:
+                st.error(f"Tahlilni boshlashda xatolik: {e}")
 
+# --- 📊 NATIJALARNI KO'RSATISH ---
 if st.session_state.analysis_results:
     res = st.session_state.analysis_results
     if isinstance(res, str):
@@ -181,35 +187,19 @@ if st.session_state.analysis_results:
             st.image(u3, use_container_width=True)
             st.markdown(f"<div class='metric-card'>Bashorat: {af} GA</div>", unsafe_allow_html=True)
 
-        # --- 📊 MUKAMMAL GRAFIK QISMI ---
         st.divider()
         st.markdown("### 📈 DINAMIK O'ZGARISHLAR VA BASHORAT")
 
         df_chart = pd.DataFrame({
-            'Davr': [f"{past_year} (Tarix)", f"{current_year} (Hozir)", f"{future_year} (Bashorat)"],
-            'Maydon (ga)': [a1, a2, af],
-            'Holat': ['Tarixiy', 'Joriy', 'Prognoz']
+            'Davr': [f"{past_year}", f"{current_year}", f"{future_year}"],
+            'Maydon (ga)': [a1, a2, af]
         })
 
         fig = px.area(df_chart, x='Davr', y='Maydon (ga)', text='Maydon (ga)', markers=True, template="plotly_dark")
-        fig.update_traces(
-            line_color='#00f2ff',
-            fillcolor='rgba(0, 242, 255, 0.2)', 
-            marker=dict(size=12, color='#ffffff', line=dict(width=2, color='#00f2ff')),
-            textposition="top center"
-        )
-        fig.update_layout(
-            paper_bgcolor='rgba(0,0,0,0)', 
-            plot_bgcolor='rgba(0,0,0,0)',  
-            font=dict(family="Orbitron", size=14, color="#00f2ff"),
-            xaxis=dict(showgrid=False, zeroline=False),
-            yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)', zeroline=False),
-            margin=dict(l=20, r=20, t=40, b=20),
-            height=450
-        )
-        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+        fig.update_traces(line_color='#00f2ff', fillcolor='rgba(0, 242, 255, 0.2)', marker=dict(size=12, color='#ffffff'))
+        fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(family="Orbitron", color="#00f2ff"))
+        st.plotly_chart(fig, use_container_width=True)
 
-        # 📑 EKSPERT XULOSASI
         risk_color = "#ff4b4b" if aero > 15 else "#00f2ff"
         risk_text = "YUQORI" if aero > 15 else "O'RTA" if aero > 5 else "BARQAROR"
         advice = "Tezkor qirg'oqni mustahkamlash lozim." if aero > 15 else "Monitoringni davom ettirish tavsiya etiladi."
