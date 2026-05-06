@@ -214,71 +214,66 @@ if st.session_state.analysis_results:
         )
         st.plotly_chart(fig, use_container_width=True)
 
-       # --- 📑 KENGAYTIRILGAN INTELLIGENT EKSPERT XULOSASI ---
+        
+# --- 📑 KENGAYTIRILGAN INTELLIGENT EKSPERT XULOSASI (FIXED) ---
         risk_color = "#ff4b4b" if aero > 15 else "#ffaa00" if aero > 5 else "#00f2ff"
         risk_text = "YUQORI (KRITIK)" if aero > 15 else "O'RTA (EHTIYOTKOR)" if aero > 5 else "BARQAROR (XAVFSIZ)"
-        
-        # Dinamik tahlil matnini shakllantirish
+        report_id = f"AMU-{datetime.now().strftime('%Y%m%d')}-PRO"
+
+        # 1. Analiz matnini tayyorlash
         if aero > 15:
-            analysis_details = f"""
-            Tizim oxirgi 7 yil ichida daryo o'zanining keskin o'zgarishini qayd etdi. 
-            <b>{aero} gektar</b> yerning yo'qolishi qirg'oqning strukturaviy yemirilishidan dalolat beradi. 
-            Kvant bashorat modeliga ko'ra, keyingi 5 yilda bu jarayon 10-15% ga tezlashishi mumkin.
-            """
+            analysis_details = f"Tizim oxirgi 7 yil ichida daryo o'zanining keskin o'zgarishini qayd etdi. <b>{aero} gektar</b> yerning yo'qolishi qirg'oqning strukturaviy yemirilishidan dalolat beradi. Kvant bashorat modeliga ko'ra, keyingi 5 yilda bu jarayon 10-15% ga tezlashishi mumkin."
             detailed_advice = """
             <li>Daryo qirg'og'ini beton va tosh to'shama (gabion) usullari bilan zudlik bilan mustahkamlash.</li>
-            <li>Xavf zonasi deb belgilangan (qizil hudud) 300 metrlik radiusda barcha turdagi qurilish ishlarini to'xtatish.</li>
-            <li>Aholi punktlari va infratuzilmani ko'chirish bo'yicha favqulodda reja ishlab chiqish.</li>
-            <li>Suv oqimi tezligini kamaytirish uchun gidrotexnik inshootlar (damba) barpo etish.</li>
+            <li>Xavf zonasi deb belgilangan 300 metrlik radiusda qurilish ishlarini to'xtatish.</li>
+            <li>Aholi punktlarini ko'chirish bo'yicha favqulodda reja ishlab chiqish.</li>
+            <li>Suv oqimi tezligini kamaytirish uchun gidrotexnik inshootlar barpo etish.</li>
             """
         elif aero > 5:
-            analysis_details = f"""
-            Hududda o'rtacha darajadagi eroziya kuzatilmoqda. <b>{aero} gektar</b> maydon daryo oqimi 
-            yo'nalishining o'zgarishi natijasida yuvilib ketgan. Hozirgi holat barqaror bo'lib tuyulsa-da, 
-            mavsumiy toshqinlar xavf darajasini oshirishi mumkin.
-            """
+            analysis_details = f"Hududda o'rtacha darajadagi eroziya kuzatilmoqda. <b>{aero} gektar</b> maydon daryo oqimi yo'nalishining o'zgarishi natijasida yuvilib ketgan. Mavsumiy toshqinlar xavf darajasini oshirishi mumkin."
             detailed_advice = """
-            <li>Qirg'oq bo'ylab daryo eroziyasiga chidamli "yashil qalqon" (tol, terak kabi daraxtlar) yaratish.</li>
-            <li>Daryo tubini tozalash va o'zanni chuqurlashtirish orqali bosimni kamaytirish.</li>
-            <li>Har 6 oyda sun'iy yo'ldosh orqali monitoring o'tkazishni davom ettirish.</li>
+            <li>Qirg'oq bo'ylab daryo eroziyasiga chidamli 'yashil qalqon' (tol, terak) yaratish.</li>
+            <li>Daryo o'zanini chuqurlashtirish orqali bosimni kamaytirish.</li>
+            <li>Har 6 oyda sun'iy yo'ldosh orqali monitoringni davom ettirish.</li>
             """
         else:
-            analysis_details = f"""
-            Hudud tahlili shuni ko'rsatadiki, daryo o'zani nisbatan barqaror holatda. 
-            Oxirgi yillarda qayd etilgan <b>{aero} gektar</b>lik o'zgarish tabiiy dinamika doirasida. 
-            Hozirgi vaqtda jiddiy o'pirilish xavfi mavjud emas.
-            """
+            analysis_details = f"Hudud tahlili shuni ko'rsatadiki, daryo o'zani barqaror holatda. Oxirgi yillarda qayd etilgan <b>{aero} gektar</b>lik o'zgarish tabiiy dinamika doirasida."
             detailed_advice = """
             <li>Mavjud holatni saqlab qolish va tabiiy landshaftni himoya qilish.</li>
             <li>Kelajakdagi o'zgarishlarni prognoz qilish uchun datchiklar o'rnatish.</li>
-            <li>Hududdagi dehqonchilik ishlarida sug'orish tizimini nazorat qilish (namlik oshib ketishi qirg'oqni yumshatadi).</li>
+            <li>Sug'orish tizimini nazorat qilish (namlik qirg'oqni yumshatmasligi uchun).</li>
             """
 
-        st.markdown(f"""
-            <div class="report-box-dynamic" style="border-left-color: {risk_color}; background: rgba(10, 25, 47, 0.9);">
-                <h3 style='color: {risk_color}; margin-bottom: 5px;'>📑 EKSPERTIZANING RASMIY BAYONNOMASI</h3>
-                <p style="font-family: 'Orbitron'; font-size: 0.9rem; color: #aaa;">ID: AMU-{datetime.now().strftime('%Y%m%d')}-PRO</p>
+        # 2. HTML strukturani yig'ish (Xatolikni oldini olish uchun formatlashni soddalashtirdik)
+        full_html = f"""
+        <div class="report-box-dynamic" style="border-left-color: {risk_color}; background: rgba(10, 25, 47, 0.95); padding: 25px; border-radius: 15px; border-left: 10px solid {risk_color}; color: white;">
+            <h3 style='color: {risk_color}; margin: 0;'>📑 EKSPERTIZANING RASMIY BAYONNOMASI</h3>
+            <p style="font-family: 'Orbitron'; font-size: 0.8rem; color: #888; margin-bottom: 15px;">ID: {report_id}</p>
+            
+            <div style="margin-top: 10px;">
+                <p style="font-size: 1.1rem;"><b>XAVF DARA JASI:</b> <span style="color:{risk_color};">{risk_text}</span></p>
+                <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 10px 0;">
+                
+                <p style="font-size: 1rem; line-height: 1.5;">
+                    <b style="color: #00f2ff;">🔍 ANALIZ NATIJASI:</b><br>
+                    {analysis_details}
+                </p>
                 
                 <div style="margin-top: 15px;">
-                    <p style="font-size: 1.2rem;"><b>XAVF DARA JASI:</b> <span style="color:{risk_color};">{risk_text}</span></p>
-                    <hr style="border-color: rgba(0,242,255,0.1);">
-                    <p style="font-size: 1.1rem; line-height: 1.6;">
-                        <b>🔍 ANALIZ NATIJASI:</b><br>
-                        {analysis_details}
-                    </p>
-                    <p style="font-size: 1.1rem; line-height: 1.6; margin-top: 15px;">
-                        <b>💡 KOMPLEKS TAVSIYALAR:</b>
-                        <ul style="padding-left: 20px;">
-                            {detailed_advice}
-                        </ul>
-                    </p>
-                </div>
-                
-                <div style="margin-top: 20px; padding: 10px; border: 1px dashed {risk_color}; border-radius: 10px; text-align: center;">
-                    <small style="color: {risk_color};">Ushbu hisobot Sentinel-2 sun'iy yo'ldosh ma'lumotlari asosida AI tomonidan generatsiya qilindi.</small>
+                    <b style="color: #00f2ff;">💡 KOMPLEKS TAVSIYALAR:</b>
+                    <ul style="padding-left: 20px; margin-top: 5px; line-height: 1.4;">
+                        {detailed_advice}
+                    </ul>
                 </div>
             </div>
-        """, unsafe_allow_html=True)
+            
+            <div style="margin-top: 20px; padding: 8px; border: 1px dashed {risk_color}; border-radius: 8px; text-align: center;">
+                <small style="color: {risk_color}; opacity: 0.8;">Sentinel-2 ma'lumotlari asosida AI-Predictor Pro tomonidan tayyorlandi.</small>
+            </div>
+        </div>
+        """
+
+        st.markdown(full_html, unsafe_allow_html=True)
 
 if st.sidebar.button("🔌 TIZIMNI O'CHIRISH"):
     st.session_state.auth = False
