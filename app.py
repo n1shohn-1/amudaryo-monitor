@@ -86,13 +86,8 @@ future_year = current_year + 5
 # --- 🧠 MUKAMMAL ANALIZ ALGORITMI ---
 def analyze_full_spectrum(geometry):
     try:
-        # 1. Hudud geometriyasini olish
-        region_ee = geometry.bounds()
-        
-        # 2. Maydonni hisoblash (km2)
+        region_ee = geometry # Polygon obyektining o'zi
         area_km2 = geometry.area().divide(1e6).getInfo()
-        
-        # 3. DINAMIK MASSHTAB - Hisoblash barqarorligi uchun
         calc_scale = 10 if area_km2 < 5 else 30
 
         def fetch_img(year):
@@ -107,19 +102,14 @@ def analyze_full_spectrum(geometry):
         img_now = fetch_img(current_year)
         
         if img_old is None or img_now is None:
-            return "Tanlangan hudud uchun sun'iy yo'ldosh tasvirlari topilmadi. Iltimos, boshqa hududni belgilang."
+            return "Tanlangan hudud uchun sun'iy yo'ldosh tasvirlari topilmadi."
 
-        # NDWI - Suv maskasi (Loyqa suvlar uchun chegara optimallashtirildi)
+        # Suv maskalari
         mask_old = img_old.normalizedDifference(['B3', 'B8']).gt(0.05)
         mask_now = img_now.normalizedDifference(['B3', 'B8']).gt(0.05)
-
-        # O'pirilish (Erosion) - Mantiqiy "And-Not" amali bilan aniqlandi
         erosion = mask_old.And(mask_now.Not()).selfMask()
-        
-        # Xavf zonasi (Suv atrofidagi 300m bufer)
         future_risk = mask_now.focal_max(radius=300, units='meters').And(mask_now.Not()).selfMask()
 
-        # Maydonlarni hisoblash funksiyasi
         def calc_area(m):
             try:
                 area = m.multiply(ee.Image.pixelArea()).reduceRegion(
@@ -129,20 +119,19 @@ def analyze_full_spectrum(geometry):
                     maxPixels=1e10
                 )
                 val = area.get('nd')
-                if val is None: return 0
-                return int(ee.Number(val).divide(10000).round().getInfo())
+                return int(ee.Number(val or 0).divide(10000).round().getInfo())
             except: return 0
 
         a_old = calc_area(mask_old)
         a_now = calc_area(mask_now)
         a_ero = calc_area(erosion)
-        a_fut = int(a_now * 1.1) 
+        a_fut = int(a_now * 1.15) # Bashorat mantiqi biroz dinamiklashtirildi
 
-        # --- 🖼 VIZUALIZATSIYA (Barqaror o'lchamda) ---
+        # --- 🖼 VIZUALIZATSIYA SOZLAMALARI (SCALE QO'SHILDI) ---
         vis = {'bands': ['B4', 'B3', 'B2'], 'min': 0, 'max': 3000, 'gamma': 1.4}
         v_params = {
-            'region': region_ee.getInfo()['coordinates'],
-            'dimensions': 800, 
+            'region': region_ee, # 'region_ee' obyekti to'g'ridan-to'g'ri berildi
+            'scale': 30,         # Piksel aniqligi - rasmlar yarim chala chiqmasligi uchun
             'format': 'png'
         }
         
@@ -150,9 +139,6 @@ def analyze_full_spectrum(geometry):
         url2 = img_now.visualize(**vis).blend(erosion.visualize(palette=['#ffff00'], opacity=1.0)).getThumbURL(v_params)
         url3 = img_now.visualize(**vis).blend(future_risk.visualize(palette=['#ff0000'], opacity=0.8)).getThumbURL(v_params)
         
-        if a_old == 0 and a_now == 0:
-            return "Belgilangan hududda suv havzasi topilmadi. Iltimos, daryo o'zanini qamrab oluvchi kattaroq maydonni chizing."
-            
         return url1, url2, url3, a_old, a_now, a_fut, a_ero
             
     except Exception as e:
@@ -160,17 +146,10 @@ def analyze_full_spectrum(geometry):
 
 # --- 🚀 ASOSIY EKRAN ---
 st.markdown("<h1>🌊 AMUDARYO AI-DEFORMRISK MONITOR PRO</h1>", unsafe_allow_html=True)
-
 st.subheader("📍 Tahlil maydonini xaritada belgilang")
-m = folium.Map(location=[41.5, 60.5], zoom_start=8, tiles="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}", attr="Google Satellite")
-folium.plugins.Draw(
-    export=False, 
-    draw_options={
-        'polyline':False, 'polygon':False, 'circle':False, 
-        'marker':False, 'circlemarker':False, 'rectangle':True
-    }
-).add_to(m)
 
+m = folium.Map(location=[41.5, 60.5], zoom_start=8, tiles="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}", attr="Google Satellite")
+folium.plugins.Draw(export=False, draw_options={'polyline':False, 'polygon':False, 'circle':False, 'marker':False, 'circlemarker':False, 'rectangle':True}).add_to(m)
 map_output = st_folium(m, width="100%", height=400, key="amu_map")
 
 if map_output['last_active_drawing']:
@@ -180,10 +159,8 @@ if map_output['last_active_drawing']:
             res = analyze_full_spectrum(ee.Geometry.Polygon(coords))
             st.session_state.analysis_results = res
 
-# NATIJALARNI CHIQARISH
 if st.session_state.analysis_results:
     res = st.session_state.analysis_results
-    
     if isinstance(res, str):
         st.error(f"❌ {res}")
     else:
@@ -191,50 +168,61 @@ if st.session_state.analysis_results:
         
         st.markdown("### 🛰 MULTI-SPEKTRAL MONITORING")
         col1, col2, col3 = st.columns(3)
-        
         with col1:
             st.markdown(f"<p style='text-align:center;'>📅 {past_year}-YIL (TARIX)</p>", unsafe_allow_html=True)
             st.image(u1, use_container_width=True)
             st.markdown(f"<div class='metric-card'>Maydon: {a1} GA</div>", unsafe_allow_html=True)
-
         with col2:
             st.markdown(f"<p style='text-align:center; color:#ffff00;'>📅 {current_year}-YIL (SARIQ: O'PIRILISH)</p>", unsafe_allow_html=True)
             st.image(u2, use_container_width=True)
             st.markdown(f"<div class='metric-card'>⚠️ Yuvilgan: {aero} GA</div>", unsafe_allow_html=True)
-
         with col3:
             st.markdown(f"<p style='text-align:center; color:#ff4b4b;'>📅 {future_year}-YIL (QIZIL: XAVF)</p>", unsafe_allow_html=True)
             st.image(u3, use_container_width=True)
             st.markdown(f"<div class='metric-card'>Bashorat: {af} GA</div>", unsafe_allow_html=True)
 
-        # GRAFIK
+        # --- 📊 MUKAMMAL GRAFIK QISMI ---
         st.divider()
-        df_chart = pd.DataFrame({'Davr': [str(past_year), "Hozirgi", "Bashorat"], 'Maydon (ga)': [a1, a2, af]})
-        fig = px.line(df_chart, x='Davr', y='Maydon (ga)', markers=True, template="plotly_dark", color_discrete_sequence=['#00f2ff'])
-        st.plotly_chart(fig, use_container_width=True)
+        st.markdown("### 📈 DINAMIK O'ZGARISHLAR VA BASHORAT")
 
-        # 📑 DINAMIK EKSPERT XULOSASI
+        df_chart = pd.DataFrame({
+            'Davr': [f"{past_year} (Tarix)", f"{current_year} (Hozir)", f"{future_year} (Bashorat)"],
+            'Maydon (ga)': [a1, a2, af],
+            'Holat': ['Tarixiy', 'Joriy', 'Prognoz']
+        })
+
+        fig = px.area(df_chart, x='Davr', y='Maydon (ga)', text='Maydon (ga)', markers=True, template="plotly_dark")
+        fig.update_traces(
+            line_color='#00f2ff',
+            fillcolor='rgba(0, 242, 255, 0.2)', 
+            marker=dict(size=12, color='#ffffff', line=dict(width=2, color='#00f2ff')),
+            textposition="top center"
+        )
+        fig.update_layout(
+            paper_bgcolor='rgba(0,0,0,0)', 
+            plot_bgcolor='rgba(0,0,0,0)',  
+            font=dict(family="Orbitron", size=14, color="#00f2ff"),
+            xaxis=dict(showgrid=False, zeroline=False),
+            yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)', zeroline=False),
+            margin=dict(l=20, r=20, t=40, b=20),
+            height=450
+        )
+        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+
+        # 📑 EKSPERT XULOSASI
         risk_color = "#ff4b4b" if aero > 15 else "#00f2ff"
         risk_text = "YUQORI" if aero > 15 else "O'RTA" if aero > 5 else "BARQAROR"
-        
-        advice = ""
-        if aero > 15:
-            advice = "Tezkor qirg'oqni mustahkamlash va aholini xavfli hududdan ko'chirish choralarini ko'rish tavsiya etiladi."
-        elif aero > 5:
-            advice = "Daryo oqimi dinamikasi o'zgarmoqda. Tabiiy to'siqlar yaratish orqali eroziyani jilovlash lozim."
-        else:
-            advice = "Hozirgi bosqichda jiddiy xavf yo'q, biroq monitoringni davom ettirish tavsiya etiladi."
+        advice = "Tezkor qirg'oqni mustahkamlash lozim." if aero > 15 else "Monitoringni davom ettirish tavsiya etiladi."
 
         st.markdown(f"""
             <div class="report-box-dynamic" style="border-left-color: {risk_color};">
                 <h3 style='color: {risk_color};'>📑 EKSPERTIZANING RASMIY BAYONNOMASI</h3>
                 <p style="font-size: 1.15rem;">
-                    Tizim tahliliga ko'ra, tanlangan hududda xavf darajasi: <b style="color:{risk_color};">{risk_text}</b>. <br><br>
-                    <b>Analiz natijasi:</b> Oxirgi 7 yil ichida daryo qirg'og'ining <b>{aero} gektar</b> qismi o'pirilgan. 
-                    Kelajakda daryoning qizil zonalari suv ostida qolish ehtimoli yuqori.
+                    Tizim tahliliga ko'ra, xavf darajasi: <b style="color:{risk_color};">{risk_text}</b>. <br>
+                    Oxirgi 7 yil ichida <b>{aero} gektar</b> qirg'oq yuvilgan.
                 </p>
                 <p style="font-size: 1.1rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px;">
-                    <b>💡 Ekspert tavsiyasi:</b> {advice}
+                    <b>💡 Tavsiya:</b> {advice}
                 </p>
             </div>
         """, unsafe_allow_html=True)
