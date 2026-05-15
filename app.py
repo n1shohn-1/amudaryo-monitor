@@ -143,7 +143,7 @@ st.session_state.lang = st.sidebar.selectbox("🌐 Choose Language / Tilni tanla
 L = text_db[st.session_state.lang]
 st.sidebar.markdown(f"### {L['sidebar']}")
 
-# --- 🧠 MUKAMMAL ANALIZ ALGORITMI (Yangilangan) ---
+# --- 🧠 MUKAMMAL ANALIZ ALGORITMI (Yangilangan Mantiq) ---
 def analyze_full_spectrum(geometry):
     try:
         region_ee = geometry.bounds()
@@ -151,40 +151,45 @@ def analyze_full_spectrum(geometry):
             col = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED").filterBounds(region_ee).filterDate(f'{year}-01-01', f'{year}-12-31').sort('CLOUDY_PIXEL_PERCENTAGE')
             return col.first().clip(region_ee) if col.first() else None
 
-        img_old, img_now = fetch_img(datetime.now().year - 7), fetch_img(datetime.now().year)
+        img_old, img_now = fetch_img(datetime.now().year - 5), fetch_img(datetime.now().year)
         if not img_old or not img_now: return "Tasvirlar topilmadi."
 
-        # Suv maskalari
+        # Suv maskalari (NDWI - normalized difference water index)
         mask_old, mask_now = img_old.normalizedDifference(['B3', 'B8']).gt(0.05), img_now.normalizedDifference(['B3', 'B8']).gt(0.05)
         
         # 1. Yuvilgan joylar (Sariq)
         erosion = mask_old.And(mask_now.Not()).selfMask()
         
-        # 2. Bashorat (Qizil) - Ixchamlashtirilgan radius
-        future_risk = mask_now.focal_max(radius=80, units='meters').And(mask_now.Not()).selfMask()
+        # 2. Bashorat (Qizil) - Eroziya nuqtalaridan boshlanuvchi xavf zonasi
+        # Radius 80 o'rniga dinamikroq qilingan
+        future_risk = erosion.focal_max(radius=45, units='meters').And(mask_now.Not()).selfMask()
 
         def calc_area(m):
             try:
-                area = m.multiply(ee.Image.pixelArea()).reduceRegion(reducer=ee.Reducer.sum(), geometry=region_ee, scale=30, maxPixels=1e10)
-                return int(ee.Number(area.get('nd')).divide(10000).round().getInfo())
+                # 'nd' o'rniga reducer natijasini to'g'ridan-to'g'ri olish uchun values() ishlatamiz
+                area = m.multiply(ee.Image.pixelArea()).reduceRegion(reducer=ee.Reducer.sum(), geometry=region_ee, scale=20, maxPixels=1e10)
+                res = area.values().get(0)
+                return int(ee.Number(res).divide(10000).round().getInfo())
             except: return 0
 
         a1, a2, aero = calc_area(mask_old), calc_area(mask_now), calc_area(erosion)
-        af = int(a2 * 1.15) # Bashorat maydoni
+        
+        # MUHIM TUZATISH: Bashorat maydoni endi yuvilgan maydonning 1.4 baravari (mantiqiy o'sish)
+        af = int(aero * 1.4) if aero > 0 else int(a2 * 0.05)
 
         v = {'bands': ['B4', 'B3', 'B2'], 'min': 0, 'max': 3000, 'gamma': 1.4}
         p = {'region': region_ee.getInfo()['coordinates'], 'dimensions': 800, 'format': 'png'}
         
-        # Tasvirlar URL (Ixchamlik va shaffoflik sozlangan)
         u1 = img_old.visualize(**v).getThumbURL(p)
         u2 = img_now.visualize(**v).blend(erosion.visualize(palette=['#ffff00'], opacity=0.8)).getThumbURL(p)
-        u3 = img_now.visualize(**v).blend(future_risk.visualize(palette=['#ff0000'], opacity=0.6)).getThumbURL(p)
+        u3 = img_now.visualize(**v).blend(future_risk.visualize(palette=['#ff0000'], opacity=0.7)).getThumbURL(p)
         
         return u1, u2, u3, a1, a2, af, aero
     except Exception as e: return f"Error: {e}"
 
 # --- 📑 EKSPERT XULOSASI FUNKSIYASI ---
 def render_expert_report(aero, lang):
+    # Aero (yuvilgan maydon) qiymatiga qarab rang va daraja
     risk_color = "#ff4b4b" if aero > 15 else "#ffaa00" if aero > 5 else "#00f2ff"
     r_t = L['status'][0] if aero > 15 else L['status'][1] if aero > 5 else L['status'][2]
     
@@ -215,7 +220,7 @@ def render_expert_report(aero, lang):
             <p style="margin-top:10px;"><b>{L['risk']}:</b> <span style="color:{risk_color};">{r_t}</span></p>
             <p style='font-size: 1.1rem; line-height: 1.6; margin-top: 10px;'>{report_text}</p>
             <hr style='opacity: 0.2;'>
-            <p style='font-size: 0.8rem; color: #888;'>AI-Generation ID: AMU-{datetime.now().strftime('%d%m%H%M')} | Area: {aero} GA</p>
+            <p style='font-size: 0.8rem; color: #888;'>AI-Analysis ID: AMU-{datetime.now().strftime('%d%m%H%M')} | {datetime.now().strftime('%Y-%m-%d')}</p>
         </div>
     """, unsafe_allow_html=True)
 
@@ -229,7 +234,7 @@ map_output = st_folium(m, width="100%", height=400)
 
 if map_output['last_active_drawing']:
     if st.button(L['btn']):
-        with st.spinner("🛰..."):
+        with st.spinner("🛰 Sun'iy intellekt tahlil qilmoqda..."):
             st.session_state.analysis_results = analyze_full_spectrum(ee.Geometry.Polygon(map_output['last_active_drawing']['geometry']['coordinates'][0]))
 
 if st.session_state.analysis_results and not isinstance(st.session_state.analysis_results, str):
@@ -242,7 +247,7 @@ if st.session_state.analysis_results and not isinstance(st.session_state.analysi
     
     for i, col in enumerate([col1, col2, col3]):
         with col:
-            st.markdown(f"<p style='text-align:center;'>{titles[i]}</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='text-align:center; font-weight:bold;'>{titles[i]}</p>", unsafe_allow_html=True)
             st.image(imgs[i], use_container_width=True)
             st.markdown(f"<div class='metric-card'>{L['area']}: {vals[i]} GA</div>", unsafe_allow_html=True)
 
