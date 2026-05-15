@@ -154,14 +154,8 @@ def analyze_full_spectrum(geometry):
         img_old, img_now = fetch_img(datetime.now().year - 5), fetch_img(datetime.now().year)
         if not img_old or not img_now: return "Tasvirlar topilmadi."
 
-        # Suv maskalari (NDWI)
         mask_old, mask_now = img_old.normalizedDifference(['B3', 'B8']).gt(0.05), img_now.normalizedDifference(['B3', 'B8']).gt(0.05)
-        
-        # 1. Yuvilgan joylar (Sariq) - FAQAT hozirgi suv o'zani bo'lmagan hudud bilan cheklaymiz
         erosion = mask_old.And(mask_now.Not()).selfMask()
-        
-        # 2. Bashorat (Qizil) - Eroziyadan keyingi quruqlik xavfi
-        # TUZATISH: .And(mask_now.Not()) filtri yanada qat'iy qo'llandi
         future_risk = erosion.focal_max(radius=45, units='meters').And(mask_now.Not()).selfMask()
 
         def calc_area(m):
@@ -178,46 +172,77 @@ def analyze_full_spectrum(geometry):
         p = {'region': region_ee.getInfo()['coordinates'], 'dimensions': 800, 'format': 'png'}
         
         u1 = img_old.visualize(**v).getThumbURL(p)
-        # Blend qismida mask_now'dan butunlay tozalash (Suv ustiga rang chiqmasligi uchun)
         u2 = img_now.visualize(**v).blend(erosion.visualize(palette=['#ffff00'], opacity=0.8)).getThumbURL(p)
         u3 = img_now.visualize(**v).blend(future_risk.visualize(palette=['#ff0000'], opacity=0.7)).getThumbURL(p)
         
         return u1, u2, u3, a1, a2, af, aero
     except Exception as e: return f"Error: {e}"
 
-# --- 📑 EKSPERT XULOSASI FUNKSIYASI ---
+# --- 📑 EKSPERT XULOSASI FUNKSIYASI (YANGILANGAN) ---
 def render_expert_report(aero, lang):
-    risk_color = "#ff4b4b" if aero > 15 else "#ffaa00" if aero > 5 else "#00f2ff"
-    r_t = L['status'][0] if aero > 15 else L['status'][1] if aero > 5 else L['status'][2]
+    # Dinamik ranglar
+    if aero > 50:
+        risk_color = "#ff0000" # To'q qizil
+        status_idx = 0
+        state = "extreme"
+    elif aero > 15:
+        risk_color = "#ff4b4b" # Qizil
+        status_idx = 0
+        state = "high"
+    elif aero > 5:
+        risk_color = "#ffaa00" # To'q sariq
+        status_idx = 1
+        state = "mid"
+    elif aero > 0:
+        risk_color = "#00f2ff" # Neon havorang
+        status_idx = 2
+        state = "low"
+    else:
+        risk_color = "#00ff00" # Yashil
+        status_idx = 2
+        state = "safe"
+
+    r_t = L['status'][status_idx]
     
     reports = {
         "O'zbekcha": {
-            "high": f"DIQQAT! Hududda kritik eroziya jarayoni aniqlandi. Oxirgi davrda daryo o'zani {aero} gektar unumdor yerni yuvib ketgan. Kelajakda qirg'oqning yanada yemirilish ehtimoli 85% dan yuqori. Zudlik bilan gabion to'siqlar o'rnatish tavsiya etiladi.",
-            "mid": f"Hududda o'rtacha darajadagi dinamik o'zgarishlar kuzatilmoqda. {aero} gektar maydon suv ostida qolgan. Vaziyat barqaror, biroq monitoringni davom ettirish va qirg'oqni yashil o'simliklar bilan mustahkamlash lozim.",
-            "low": f"Hudud gidrologik jihatdan barqaror. Aniqlangan {aero} gektar o'zgarish daryo o'zanining tabiiy mavsumiy tebranishi hisoblanadi. Hozirda muhandislik aralashuviga ehtiyoj yo'q."
+            "extreme": f"FAVQULODDA HOLAT! Hududda {aero} gektar maydon yuvilgan. Daryo o'zanining kuchli migratsiyasi kuzatilmoqda. Qirg'oq bo'yidagi infratuzilma va aholi punktlari uchun xavf o'ta yuqori. Zudlik bilan damba qurish va qirg'oqni betonlashtirish choralari ko'rilishi shart.",
+            "high": f"KRITIK VAZIYAT! Oxirgi yillarda {aero} gektar unumdor yer boy berilgan. AI tahlili qirg'oqning geometrik shakli keskin o'zgarganini ko'rsatmoqda. Kelajakda yuvilish ehtimoli yuqori. Gabion to'siqlar va qirg'oqni himoya qilish tizimlarini joriy etish tavsiya etiladi.",
+            "mid": f"BARQAROR BO'LMAGAN HOLAT. {aero} gektar maydon yuvilgan. Daryoning oqim kuchi va qirg'oq tarkibi o'rtacha darajadagi eroziyaga sabab bo'lmoqda. Monitoringni kuchaytirish va biologik himoya usullari (daraxt ekish) qo'llanilishi lozim.",
+            "low": f"ME'YORIY O'ZGARISH. Hududda kichik hajmdagi ({aero} GA) eroziya aniqlandi. Bu daryo o'zani uchun tabiiy jarayon hisoblanadi. Hozirda yirik muhandislik aralashuviga ehtiyoj yo'q, biroq masofaviy nazorat davom etishi kerak.",
+            "safe": f"HUDUD BARQAROR. Tahlil qilingan davrda daryo o'zani o'zgarmagan. Qirg'oq strukturasi mustahkam. Gidrologik xavf mavjud emas."
         },
         "Русский": {
-            "high": f"ВНИМАНИЕ! Обнаружена критическая эрозия. Река поглотила {aero} га земли. Риск дальнейшего обрушения берега превышает 85%. Рекомендуется немедленное возведение защитных сооружений.",
-            "mid": f"Наблюдаются умеренные динамические изменения. Размыто {aero} га. Ситуация стабильна, рекомендуется биологическое укрепление берегов и мониторинг.",
-            "low": f"Территория гидрологически стабильна. Изменение в {aero} га является естественным сезонным процессом. Инженерное вмешательство не требуется."
+            "extreme": f"ЧРЕЗВЫЧАЙНАЯ СИТУАЦИЯ! Размыто {aero} га. Наблюдается сильная миграция русла реки. Риск для инфраструктуры и населения крайне высок. Необходимы экстренные меры по строительству дамб и бетонированию берегов.",
+            "high": f"КРИТИЧЕСКАЯ СИТУАЦИЯ! Утеряно {aero} га плодородной земли. Анализ ИИ показывает резкое изменение береговой линии. Рекомендуется установка габионов и систем берегоукрепления.",
+            "mid": f"НЕСТАБИЛЬНОЕ СОСТОЯНИЕ. Размыто {aero} га. Сила течения вызывает умеренную эрозию. Рекомендуется усиление мониторинга и методы биологической защиты (посадка деревьев).",
+            "low": f"НОРМАТИВНЫЕ ИЗМЕНЕНИЯ. Обнаружена незначительная эрозия ({aero} га). Это естественный процесс для русла реки. На данный момент вмешательство не требуется.",
+            "safe": f"ТЕРРИТОРИЯ СТАБИЛЬНА. За анализируемый период русло реки не изменилось. Гидрологическая угроза отсутствует."
         },
         "English": {
-            "high": f"WARNING! Critical erosion detected. {aero} hectares have been lost to the river. Risk of further collapse exceeds 85%. Immediate installation of protective barriers is recommended.",
-            "mid": f"Moderate dynamic changes observed. {aero} hectares eroded. Situation is stable, but ongoing monitoring and biological bank stabilization are advised.",
-            "low": f"The area is hydrologically stable. The {aero} hectare change is within natural seasonal fluctuations. No engineering intervention needed."
+            "extreme": f"EMERGENCY! {aero} hectares eroded. Strong riverbed migration observed. High risk for infrastructure and local residents. Immediate dam construction and bank reinforcement are mandatory.",
+            "high": f"CRITICAL SITUATION! {aero} hectares of fertile land lost. AI analysis shows drastic changes in the coastline. Installation of gabions and shore protection systems is recommended.",
+            "mid": f"UNSTABLE CONDITION. {aero} hectares eroded. Flow velocity is causing moderate erosion. Enhanced monitoring and biological protection (tree planting) are advised.",
+            "low": f"NORMAL FLUCTUATION. Minor erosion ({aero} ha) detected. This is a natural process for the riverbed. No major engineering intervention needed, but remote monitoring should continue.",
+            "safe": f"AREA STABLE. The riverbed has not changed during the analyzed period. Coastal structure is firm. No hydrological risk."
         }
     }
     
-    state = "high" if aero > 15 else "mid" if aero > 5 else "low"
     report_text = reports[lang][state]
     
     st.markdown(f"""
-        <div style="border-left: 10px solid {risk_color}; background: rgba(10, 25, 47, 0.95); padding: 25px; border-radius: 15px; margin-top: 20px;">
-            <h3 style='color: {risk_color}; margin: 0;'>{L['expert_title']}</h3>
-            <p style="margin-top:10px;"><b>{L['risk']}:</b> <span style="color:{risk_color};">{r_t}</span></p>
-            <p style='font-size: 1.1rem; line-height: 1.6; margin-top: 10px;'>{report_text}</p>
-            <hr style='opacity: 0.2;'>
-            <p style='font-size: 0.8rem; color: #888;'>AI-Analysis ID: AMU-{datetime.now().strftime('%d%m%H%M')} | {datetime.now().strftime('%Y-%m-%d')}</p>
+        <div style="border-left: 10px solid {risk_color}; background: rgba(10, 25, 47, 0.95); padding: 25px; border-radius: 15px; margin-top: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
+            <h3 style='color: {risk_color}; margin: 0; letter-spacing: 2px;'>{L['expert_title']}</h3>
+            <div style="display: flex; gap: 20px; margin-top: 15px;">
+                <p style="margin: 0;"><b>{L['risk']}:</b> <span style="color:{risk_color}; font-weight: bold;">{r_t}</span></p>
+                <p style="margin: 0;"><b>Yuvilgan maydon:</b> <span style="color:{risk_color}; font-weight: bold;">{aero} GA</span></p>
+            </div>
+            <p style='font-size: 1.15rem; line-height: 1.7; margin-top: 15px; color: #e0e0e0; font-style: italic;'>"{report_text}"</p>
+            <hr style='opacity: 0.1; margin: 20px 0;'>
+            <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: #888;">
+                <span>AI-Analysis Engine: Copernicus Sentinel-2</span>
+                <span>ID: AMU-{datetime.now().strftime('%d%m%H%M')} | {datetime.now().strftime('%Y-%m-%d %H:%M')}</span>
+            </div>
         </div>
     """, unsafe_allow_html=True)
 
