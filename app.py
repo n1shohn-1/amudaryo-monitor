@@ -8,7 +8,7 @@ import folium
 from streamlit_folium import st_folium
 from geopy.geocoders import Nominatim
 
-# 1. SAHIFA SOZLAMALARI (Har doim eng yuqorida bo'lishi kerak)
+# 1. SAHIFA SOZLAMALARI
 st.set_page_config(
     page_title="Amudaryo AI-Predictor Pro",
     page_icon="🛰",
@@ -37,7 +37,7 @@ if 'lang' not in st.session_state:
 if "auth" not in st.session_state:
     st.session_state.auth = False
 
-# --- 🌍 3-TILLI LUG'AT ---
+# --- 🌍 3-TILLI LUG'AT (YANGILANDI: Yo'nalishlar va Etiketlar qo'shildi) ---
 text_db = {
     "O'zbekcha": {
         "title": "🌊 AMUDARYO AI-MONITOR PRO",
@@ -55,7 +55,14 @@ text_db = {
         "auth_btn": "FAOLLASHTIRISH",
         "logout": "🔌 TIZIMNI O'CHIRISH",
         "status": ["YUQORI (KRITIK)", "O'RTA (EHTIYOTKOR)", "BARQAROR (XAVFSIZ)"],
-        "loc_info": "📍 HUDUDIY MA'LUMOTLAR"
+        "loc_info": "📍 HUDUDIY MA'LUMOTLAR",
+        "coords_label": "Aniq koordinatalar",
+        "address_label": "Rasmiy manzil",
+        "directions": {"N": "Sh.k", "S": "J.k", "E": "Sh.u", "W": "G'.u"},
+        "expert_advice": {
+            "critical": "Zudlik bilan qirg'oqni mustahkamlash uchun beton-gabion konstruksiyalarini o'rnatish va daryo o'zanini chuqurlashtirish tavsiya etiladi. Eroziya darajasi xavfli.",
+            "stable": "Vaziyat barqaror. Monitoringni davom ettirish va daryo bo'yida tabiiy to'siqlar (tol, itshumurt) ekish maqsadga muvofiq."
+        }
     },
     "Русский": {
         "title": "🌊 АМУДАРЬЯ AI-MONITOR PRO",
@@ -73,7 +80,14 @@ text_db = {
         "auth_btn": "АКТИВИРОВАТЬ",
         "logout": "🔌 ВЫЙТИ ИЗ СИСТЕМЫ",
         "status": ["ВЫСОКИЙ (КРИТИЧЕСКИЙ)", "СРЕДНИЙ", "СТАБИЛЬНЫЙ"],
-        "loc_info": "📍 ТЕРРИТОРИАЛЬНЫЕ ДАННЫЕ"
+        "loc_info": "📍 ТЕРРИТОРИАЛЬНЫЕ ДАННЫЕ",
+        "coords_label": "Точные координаты",
+        "address_label": "Официальный адрес",
+        "directions": {"N": "с.ш.", "S": "ю.ш.", "E": "в.д.", "W": "з.д."},
+        "expert_advice": {
+            "critical": "Рекомендуется немедленная установка бетонно-габионных конструкций и дноуглубительные работы. Скорость эрозии критическая.",
+            "stable": "Ситуация стабильна. Рекомендуется посадка берегозащитных лесонасаждений и плановый мониторинг."
+        }
     },
     "English": {
         "title": "🌊 AMUDARYA AI-MONITOR PRO",
@@ -91,11 +105,18 @@ text_db = {
         "auth_btn": "ACTIVATE",
         "logout": "🔌 SHUTDOWN SYSTEM",
         "status": ["HIGH (CRITICAL)", "MEDIUM (CAUTION)", "STABLE (SAFE)"],
-        "loc_info": "📍 LOCATION DATA"
+        "loc_info": "📍 LOCATION DATA",
+        "coords_label": "Precise Coordinates",
+        "address_label": "Official Address",
+        "directions": {"N": "N", "S": "S", "E": "E", "W": "W"},
+        "expert_advice": {
+            "critical": "Immediate installation of gabion structures and riverbed dredging is highly recommended. Erosion rate is critical.",
+            "stable": "The area is hydrologically stable. Continued monitoring and planting of riparian vegetation are recommended."
+        }
     }
 }
 
-# --- 🎨 DINAMIK NEON DIZAYN (Qavslar xatosi to'g'irlandi) ---
+# --- 🎨 DINAMIK NEON DIZAYN ---
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Exo+2:wght@300;600&display=swap');
@@ -150,11 +171,19 @@ st.session_state.lang = st.sidebar.selectbox("🌐 Choose Language / Tilni tanla
 L = text_db[st.session_state.lang]
 st.sidebar.markdown(f"### {L['sidebar']}")
 
-# --- 🛰 HUDUD NOMINI ANIQLASH (GEO-CODING) ---
-def get_location_details(coords):
+# --- 🧭 KOORDINATALARNI FORMATLASH (YANGI) ---
+def format_coords_by_lang(lat, lon, lang_dict):
+    ns = lang_dict['directions']["N"] if lat >= 0 else lang_dict['directions']["S"]
+    ew = lang_dict['directions']["E"] if lon >= 0 else lang_dict['directions']["W"]
+    return f"{abs(lat):.6f}° {ns}, {abs(lon):.6f}° {ew}"
+
+# --- 🛰 HUDUD NOMINI ANIQLASH (YANGILANDI: Tilda so'rash qo'shildi) ---
+def get_location_details(coords, lang_name):
     try:
+        mapping = {"O'zbekcha": "uz", "Русский": "ru", "English": "en"}
         geolocator = Nominatim(user_agent="amudaryo_monitor_pro")
-        location = geolocator.reverse(f"{coords[1]}, {coords[0]}", timeout=10)
+        # Tanlangan tilda manzilni so'raymiz
+        location = geolocator.reverse(f"{coords[1]}, {coords[0]}", timeout=10, language=mapping.get(lang_name, "en"))
         return location.address if location else "Noma'lum hudud"
     except:
         return "Koordinata aniqlandi, lekin manzil serveri bilan aloqa yo'q"
@@ -164,7 +193,7 @@ def analyze_full_spectrum(geometry):
     try:
         region_ee = geometry.bounds()
         centroid_data = geometry.centroid().coordinates().getInfo() 
-        address = get_location_details(centroid_data)
+        address = get_location_details(centroid_data, st.session_state.lang)
 
         def fetch_img(year):
             col = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED").filterBounds(region_ee).filterDate(f'{year}-01-01', f'{year}-12-31').sort('CLOUDY_PIXEL_PERCENTAGE')
@@ -190,6 +219,9 @@ def analyze_full_spectrum(geometry):
 
         a1, a2, aero = calc_area(mask_old), calc_area(mask_now), calc_area(erosion)
         af = int(aero * 1.4) if aero > 0 else int(a2 * 0.05)
+        
+        # Eroziya dinamikasi (%)
+        change_rate = (aero / a1 * 100) if a1 > 0 else 0
 
         v = {'bands': ['B4', 'B3', 'B2'], 'min': 0, 'max': 3000, 'gamma': 1.4}
         p = {'region': region_ee.getInfo()['coordinates'], 'dimensions': 800, 'format': 'png'}
@@ -198,65 +230,44 @@ def analyze_full_spectrum(geometry):
         u2 = img_now.visualize(**v).blend(erosion.visualize(palette=['#ffff00'], opacity=0.8)).getThumbURL(p)
         u3 = img_now.visualize(**v).blend(future_risk.visualize(palette=['#ff0000'], opacity=0.7)).getThumbURL(p)
         
-        return u1, u2, u3, a1, a2, af, aero, centroid_data, address
+        return u1, u2, u3, a1, a2, af, aero, change_rate, centroid_data, address
     except Exception as e: return f"Error: {e}"
 
-# --- 📑 EKSPERT XULOSASI FUNKSIYASI ---
-def render_expert_report(aero, lang, address, centroid):
-    if aero > 50:
-        risk_color, status_idx, state = "#ff0000", 0, "extreme"
-    elif aero > 15:
-        risk_color, status_idx, state = "#ff4b4b", 0, "high"
-    elif aero > 5:
-        risk_color, status_idx, state = "#ffaa00", 1, "mid"
-    elif aero > 0:
-        risk_color, status_idx, state = "#00f2ff", 2, "low"
+# --- 📑 EKSPERT XULOSASI FUNKSIYASI (YANGILANDI: Realistik va ilmiy) ---
+def render_expert_report(aero, change_rate, lang_code, address, centroid):
+    lang_dict = text_db[lang_code]
+    f_coords = format_coords_by_lang(centroid[1], centroid[0], lang_dict)
+    
+    if aero > 20 or change_rate > 15:
+        risk_color, status_idx, advice_key = "#ff0000", 0, "critical"
     else:
-        risk_color, status_idx, state = "#00ff00", 2, "safe"
+        risk_color, status_idx, advice_key = "#00f2ff", 2, "stable"
 
-    r_t = L['status'][status_idx]
+    r_t = lang_dict['status'][status_idx]
     
-    reports = {
-        "O'zbekcha": {
-            "extreme": f"FAVQULODDA HOLAT! {address} hududida {aero} gektar maydon yuvilgan. Daryo o'zanining kuchli migratsiyasi kuzatilmoqda.",
-            "high": f"KRITIK VAZIYAT! {address} hududida {aero} gektar unumdor yer boy berilgan. AI qirg'oqning keskin o'zgarganini tasdiqlaydi.",
-            "mid": f"BARQAROR BO'LMAGAN HOLAT. {address} hududida {aero} gektar yuvilgan. Daraxt ekish tavsiya etiladi.",
-            "low": f"ME'YORIY O'ZGARISH. {address} hududida {aero} GA eroziya aniqlandi. Bu daryo uchun tabiiy jarayon.",
-            "safe": f"HUDUD BARQAROR. {address} hududida daryo o'zani turg'un holatda."
-        },
-        "Русский": {
-            "extreme": f"ЧРЕЗВЫЧАЙНАЯ СИТУАЦИЯ! В районе {address} размыто {aero} га. Наблюдается сильная миграция русла.",
-            "high": f"КРИТИЧЕСКАЯ СИТУАЦИЯ! В районе {address} утеряно {aero} га земли.",
-            "mid": f"НЕСТАБИЛЬНОЕ СОСТОЯНИЕ. В районе {address} размыто {aero} га.",
-            "low": f"НОРМАТИВНЫЕ ИЗМЕНЕНИЯ. В районе {address} обнаружена незначительная эрозия.",
-            "safe": f"ТЕРРИТОРИЯ СТАБИЛЬНА. В районе {address} русло реки стабильно."
-        },
-        "English": {
-            "extreme": f"EMERGENCY! {aero} hectares eroded in {address}. Strong riverbed migration observed.",
-            "high": f"CRITICAL SITUATION! {aero} hectares of fertile land lost in {address}.",
-            "mid": f"UNSTABLE CONDITION. {aero} hectares eroded in {address}.",
-            "low": f"NORMAL FLUCTUATION. Minor erosion ({aero} ha) detected in {address}.",
-            "safe": f"AREA STABLE. Riverbed in {address} remains firm."
-        }
+    # Ma'lumotlarni tilda chiqarish uchun lug'at
+    desc = {
+        "O'zbekcha": f"Oxirgi 5 yillik tahlil shuni ko'rsatadiki, hududning {change_rate:.1f}% qismi gidrologik eroziyaga uchragan. {address} hududida jami {aero} GA maydon yo'qotilgan.",
+        "Русский": f"Анализ за последние 5 лет показывает, что {change_rate:.1f}% территории подверглось гидрологической эрозии. В районе {address} потеряно {aero} га.",
+        "English": f"Analysis over the last 5 years shows that {change_rate:.1f}% of the area has undergone hydrological erosion. A total of {aero} hectares lost in {address}."
     }
-    
-    report_text = reports[lang][state]
     
     st.markdown(f"""
         <div style="border-left: 10px solid {risk_color}; background: rgba(10, 25, 47, 0.95); padding: 25px; border-radius: 15px; margin-top: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
-            <h3 style='color: {risk_color}; margin: 0;'>{L['expert_title']}</h3>
+            <h3 style='color: {risk_color}; margin: 0;'>{lang_dict['expert_title']}</h3>
             <div class="loc-box" style="margin-top:15px;">
-                <p style="margin:0; font-size:0.9rem;">🧭 <b>Koordinatalar:</b> {centroid[1]:.6f}, {centroid[0]:.6f}</p>
-                <p style="margin:0; font-size:0.9rem;">📍 <b>Manzil:</b> {address}</p>
+                <p style="margin:0; font-size:0.9rem;">🧭 <b>{lang_dict['coords_label']}:</b> {f_coords}</p>
+                <p style="margin:0; font-size:0.9rem;">📍 <b>{lang_dict['address_label']}:</b> {address}</p>
             </div>
             <div style="display: flex; gap: 20px; margin-top: 10px;">
-                <p style="margin: 0;"><b>{L['risk']}:</b> <span style="color:{risk_color}; font-weight: bold;">{r_t}</span></p>
-                <p style="margin: 0;"><b>Yuvilgan maydon:</b> <span style="color:{risk_color}; font-weight: bold;">{aero} GA</span></p>
+                <p style="margin: 0;"><b>{lang_dict['risk']}:</b> <span style="color:{risk_color}; font-weight: bold;">{r_t}</span></p>
+                <p style="margin: 0;"><b>Eroziya dinamikasi:</b> <span style="color:{risk_color}; font-weight: bold;">{change_rate:.1f}%</span></p>
             </div>
-            <p style='font-size: 1.1rem; line-height: 1.6; margin-top: 15px; color: #e0e0e0; font-style: italic;'>"{report_text}"</p>
+            <p style='font-size: 1.05rem; line-height: 1.6; margin-top: 15px; color: #e0e0e0;'>{desc[lang_code]}</p>
+            <p style='font-size: 1.1rem; color: #00f2ff; font-style: italic;'>"{lang_dict['expert_advice'][advice_key]}"</p>
             <hr style='opacity: 0.1;'>
             <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #888;">
-                <span>Metod: NDWI Sentinel-2 L2A</span>
+                <span>Metod: NDWI Sentinel-2 L2A Multispectral Analysis</span>
                 <span>ID: AMU-{datetime.now().strftime('%d%m%H%M')}</span>
             </div>
         </div>
@@ -278,9 +289,10 @@ if map_output['last_active_drawing']:
             st.session_state.analysis_results = analyze_full_spectrum(geom)
 
 if st.session_state.analysis_results and not isinstance(st.session_state.analysis_results, str):
-    u1, u2, u3, a1, a2, af, aero, cent, addr = st.session_state.analysis_results
+    u1, u2, u3, a1, a2, af, aero, c_rate, cent, addr = st.session_state.analysis_results
+    f_coords = format_coords_by_lang(cent[1], cent[0], L)
     
-    st.markdown(f"<div class='loc-box'><b>{L['loc_info']}:</b> {addr} | {cent[1]:.4f}, {cent[0]:.4f}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='loc-box'><b>{L['loc_info']}:</b> {addr} | {f_coords}</div>", unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns(3)
     titles = [L['history'], L['wash'], L['forecast']]
@@ -293,7 +305,8 @@ if st.session_state.analysis_results and not isinstance(st.session_state.analysi
             st.markdown(f"<div class='metric-card'>{L['area']}: {vals[i]} GA</div>", unsafe_allow_html=True)
 
     st.divider()
-    render_expert_report(aero, st.session_state.lang, addr, cent)
+    # Yangilangan ekspert xulosasini chiqarish
+    render_expert_report(aero, c_rate, st.session_state.lang, addr, cent)
 
 if st.sidebar.button(L['logout']):
     st.session_state.auth = False
