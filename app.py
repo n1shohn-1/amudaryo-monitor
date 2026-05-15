@@ -28,35 +28,94 @@ except Exception as e:
     st.error(f"🛰 Tizimga ulanishda xatolik: {e}")
     st.stop()
 
-# --- 🧠 SESSION STATE ---
+# --- 🧠 SESSION STATE (O'ZGARISHSIZ + TIL QO'SHILDI) ---
 if 'analysis_results' not in st.session_state:
     st.session_state.analysis_results = None
+if 'lang' not in st.session_state:
+    st.session_state.lang = "O'zbekcha"
 
-# --- 🎨 MODERN CYBER-UZBEK DIZAYNI (CSS) ---
-st.markdown("""
+# --- 🌍 MULTILINGUAL DICTIONARY (3 TA TIL LUG'ATI) ---
+text_db = {
+    "O'zbekcha": {
+        "title": "🌊 AMUDARYO AI-DEFORMRISK MONITOR PRO",
+        "map_sub": "📍 Tahlil maydonini xaritada belgilang",
+        "btn": "🔍 TANLANGAN HUDUDNI ANALIZ QILISH",
+        "sidebar": "🛠 TIZIM BOSHQARUVI",
+        "history": "TARIX",
+        "current": "HOZIRGI",
+        "forecast": "BASHORAT",
+        "area_label": "Maydon",
+        "wash_label": "Yuvilgan",
+        "risk_label": "XAVF DARAJASI",
+        "chart_title": "📊 HUDUDIY DINAMIKA VA KVANT PROGNOZ",
+        "expert": "📑 EKSPERTIZANING RASMIY BAYONNOMASI",
+        "auth_title": "TIZIMGA KIRISH",
+        "auth_key": "MAXFIY KALIT:",
+        "auth_btn": "FAOLLASHTIRISH",
+        "logout": "🔌 TIZIMNI O'CHIRISH"
+    },
+    "Русский": {
+        "title": "🌊 АМУДАРЬЯ AI-DEFORMRISK MONITOR PRO",
+        "map_sub": "📍 Отметьте область анализа на карте",
+        "btn": "🔍 АНАЛИЗИРОВАТЬ ВЫБРАННУЮ ОБЛАСТЬ",
+        "sidebar": "🛠 УПРАВЛЕНИЕ СИСТЕМОЙ",
+        "history": "ИСТОРИЯ",
+        "current": "ТЕКУЩИЙ",
+        "forecast": "ПРОГНОЗ",
+        "area_label": "Площадь",
+        "wash_label": "Размыто",
+        "risk_label": "УРОВЕНЬ РИСКА",
+        "chart_title": "📊 ТЕРРИТОРИАЛЬНАЯ ДИНАМИКА И КВАНТОВЫЙ ПРОГНОЗ",
+        "expert": "📑 ОФИЦИАЛЬНЫЙ ОТЧЕТ ЭКСПЕРТИЗЫ",
+        "auth_title": "ВХОД В СИСТЕМУ",
+        "auth_key": "СЕКРЕТНЫЙ КЛЮЧ:",
+        "auth_btn": "АКТИВИРОВАТЬ",
+        "logout": "🔌 ВЫЙТИ ИЗ СИСТЕМЫ"
+    },
+    "English": {
+        "title": "🌊 AMUDARYA AI-DEFORMRISK MONITOR PRO",
+        "map_sub": "📍 Mark the analysis area on the map",
+        "btn": "🔍 ANALYZE SELECTED AREA",
+        "sidebar": "🛠 SYSTEM CONTROL",
+        "history": "HISTORY",
+        "current": "CURRENT",
+        "forecast": "FORECAST",
+        "area_label": "Area",
+        "wash_label": "Eroded",
+        "risk_label": "RISK LEVEL",
+        "chart_title": "📊 REGIONAL DYNAMICS & QUANTUM FORECAST",
+        "expert": "📑 OFFICIAL EXPERT REPORT",
+        "auth_title": "SYSTEM LOGIN",
+        "auth_key": "SECRET KEY:",
+        "auth_btn": "ACTIVATE",
+        "logout": "🔌 SHUTDOWN SYSTEM"
+    }
+}
+L = text_db[st.session_state.lang]
+
+# --- 🎨 JILVADOR MODERN CYBER DIZAYN (KODINGIZDAN YAXSHILANDI) ---
+st.markdown(f"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Exo+2:wght@300;600&display=swap');
-    .stApp {
+    .stApp {{
         background: linear-gradient(rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0.8)), 
-                    url('https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=1920&q=80');
+                    url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1920&q=80');
         background-size: cover; background-attachment: fixed;
         color: #ffffff; font-family: 'Exo 2', sans-serif;
-    }
-    [data-testid="stSidebar"] { background: rgba(10, 25, 47, 0.95) !important; border-right: 2px solid #00f2ff; }
-    .metric-card {
+    }}
+    [data-testid="stSidebar"] {{ background: rgba(10, 25, 47, 0.95) !important; border-right: 2px solid #00f2ff; }}
+    .metric-card {{
         background: rgba(16, 33, 65, 0.8); padding: 20px; border-radius: 15px;
         border: 1px solid #00f2ff; text-align: center; box-shadow: 0 0 15px rgba(0, 242, 255, 0.2);
-    }
-    .report-box-dynamic { 
-        padding: 30px; border-radius: 20px; border: 2px solid #00f2ff; 
-        background-color: rgba(10, 25, 47, 0.85); backdrop-filter: blur(10px); margin-top: 20px; border-left: 10px solid #00f2ff;
-    }
-    h1, h2, h3 { font-family: 'Orbitron', sans-serif !important; color: #00f2ff !important; text-transform: uppercase; }
-    .stButton>button {
-        width: 100%; background: transparent !important; color: #00f2ff !important;
-        border: 2px solid #00f2ff !important; font-family: 'Orbitron', sans-serif; transition: 0.4s;
-    }
-    .stButton>button:hover { background: #00f2ff !important; color: #000 !important; box-shadow: 0 0 20px #00f2ff; }
+        transition: 0.3s;
+    }}
+    .metric-card:hover {{ transform: scale(1.05); box-shadow: 0 0 25px #00f2ff; }}
+    h1, h2, h3 {{ font-family: 'Orbitron', sans-serif !important; color: #00f2ff !important; text-transform: uppercase; text-shadow: 0 0 10px #00f2ff; }}
+    .stButton>button {{
+        width: 100%; background: linear-gradient(45deg, #00f2ff, #0072ff) !important; color: white !important;
+        border: none !important; font-family: 'Orbitron', sans-serif; transition: 0.4s; border-radius: 10px;
+    }}
+    .stButton>button:hover {{ box-shadow: 0 0 20px #00f2ff; transform: translateY(-2px); }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -66,24 +125,25 @@ if not st.session_state.auth:
     st.markdown("<div style='height: 100px;'></div>", unsafe_allow_html=True)
     _, col_auth, _ = st.columns([1,1.2,1])
     with col_auth:
-        st.markdown("<h2 style='text-align: center;'>TIZIMGA KIRISH</h2>", unsafe_allow_html=True)
-        pw = st.text_input("MAXFIY KALIT:", type="password")
-        if st.button("FAOLLASHTIRISH"):
+        st.markdown(f"<h2 style='text-align: center;'>{L['auth_title']}</h2>", unsafe_allow_html=True)
+        pw = st.text_input(L['auth_key'], type="password")
+        if st.button(L['auth_btn']):
             if pw == "Amudaryo_AI":
                 st.session_state.auth = True
                 st.rerun()
-            else: st.error("Xato kalit kiritildi!")
+            else: st.error("Xato kalit!")
     st.stop()
 
 # --- 🛰 BOSHQARUV ---
 st.sidebar.image("https://img.icons8.com/fluency/96/river.png", width=80)
-st.sidebar.markdown("### 🛠 TIZIM BOSHQARUVI")
+st.session_state.lang = st.sidebar.selectbox("🌐 Language / Til", ["O'zbekcha", "Русский", "English"])
+st.sidebar.markdown(f"### {L['sidebar']}")
 
 current_year = datetime.now().year
 past_year = current_year - 7
 future_year = current_year + 5
 
-# --- 🧠 MUKAMMAL ANALIZ ALGORITMI ---
+# --- 🧠 MUKAMMAL ANALIZ ALGORITMI (ASL HOLIDA SAQLANDI) ---
 def analyze_full_spectrum(geometry):
     try:
         region_ee = geometry.bounds()
@@ -112,19 +172,14 @@ def analyze_full_spectrum(geometry):
         def calc_area(m):
             try:
                 area = m.multiply(ee.Image.pixelArea()).reduceRegion(
-                    reducer=ee.Reducer.sum(), 
-                    geometry=region_ee, 
-                    scale=calc_scale, 
-                    maxPixels=1e10
+                    reducer=ee.Reducer.sum(), geometry=region_ee, scale=calc_scale, maxPixels=1e10
                 )
                 val = area.get('nd')
                 if val is None: return 0
                 return int(ee.Number(val).divide(10000).round().getInfo())
             except: return 0
 
-        a_old = calc_area(mask_old)
-        a_now = calc_area(mask_now)
-        a_ero = calc_area(erosion)
+        a_old, a_now, a_ero = calc_area(mask_old), calc_area(mask_now), calc_area(erosion)
         a_fut = int(a_now * 1.1) 
 
         vis = {'bands': ['B4', 'B3', 'B2'], 'min': 0, 'max': 3000, 'gamma': 1.4}
@@ -139,114 +194,27 @@ def analyze_full_spectrum(geometry):
         return f"Tizim xatosi: {str(e)}"
 
 # --- 🚀 ASOSIY EKRAN ---
-st.markdown("<h1>🌊 AMUDARYO AI-DEFORMRISK MONITOR PRO</h1>", unsafe_allow_html=True)
-st.subheader("📍 Tahlil maydonini xaritada belgilang")
+st.markdown(f"<h1>{L['title']}</h1>", unsafe_allow_html=True)
+st.subheader(L['map_sub'])
 
 m = folium.Map(location=[41.5, 60.5], zoom_start=8, tiles="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}", attr="Google Satellite")
 folium.plugins.Draw(export=False, draw_options={'polyline':False, 'polygon':False, 'circle':False, 'marker':False, 'circlemarker':False, 'rectangle':True}).add_to(m)
 map_output = st_folium(m, width="100%", height=400, key="amu_map")
 
 if map_output['last_active_drawing']:
-    if st.button("🔍 TANLANGAN HUDUDNI ANALIZ QILISH"):
-        with st.spinner("🛰 Kvant serverlar tahlil o'tkazmoqda..."):
+    if st.button(L['btn']):
+        with st.spinner("🛰..."):
             coords = map_output['last_active_drawing']['geometry']['coordinates'][0]
-            res = analyze_full_spectrum(ee.Geometry.Polygon(coords))
-            st.session_state.analysis_results = res
+            st.session_state.analysis_results = analyze_full_spectrum(ee.Geometry.Polygon(coords))
 
 if st.session_state.analysis_results:
     res = st.session_state.analysis_results
-    if isinstance(res, str):
-        st.error(f"❌ {res}")
+    if isinstance(res, str): st.error(f"❌ {res}")
     else:
         u1, u2, u3, a1, a2, af, aero = res
-        st.markdown("### 🛰 MULTI-SPEKTRAL MONITORING")
+        st.markdown(f"### 🛰 MULTI-SPEKTRAL MONITORING ({st.session_state.lang})")
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.markdown(f"<p style='text-align:center;'>📅 {past_year}-YIL (TARIX)</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='text-align:center;'>📅 {past_year}-YIL ({L['history']})</p>", unsafe_allow_html=True)
             st.image(u1, use_container_width=True)
-            st.markdown(f"<div class='metric-card'>Maydon: {a1} GA</div>", unsafe_allow_html=True)
-        with col2:
-            st.markdown(f"<p style='text-align:center; color:#ffff00;'>📅 {current_year}-YIL (SARIQ: O'PIRILISH)</p>", unsafe_allow_html=True)
-            st.image(u2, use_container_width=True)
-            st.markdown(f"<div class='metric-card'>⚠️ Yuvilgan: {aero} GA</div>", unsafe_allow_html=True)
-        with col3:
-            st.markdown(f"<p style='text-align:center; color:#ff4b4b;'>📅 {future_year}-YIL (QIZIL: XAVF)</p>", unsafe_allow_html=True)
-            st.image(u3, use_container_width=True)
-            st.markdown(f"<div class='metric-card'>Bashorat: {af} GA</div>", unsafe_allow_html=True)
-
-        # --- 📈 ZAMONAVIY FUTURISTIK GRAFIK QISMI ---
-        st.divider()
-        st.markdown("### 📊 HUDUDIY DINAMIKA VA KVANT PROGNOZ")
-        
-        df_chart = pd.DataFrame({
-            'Davr': [str(past_year), "Hozirgi", "Bashorat"], 
-            'Maydon (ga)': [a1, a2, af],
-            'Holat': ['Tarixiy', 'Real-vaqt', 'AI-Bashorat']
-        })
-
-        fig = px.area(
-            df_chart, 
-            x='Davr', 
-            y='Maydon (ga)', 
-            text='Maydon (ga)',
-            hover_data=['Holat'],
-            template="plotly_dark"
-        )
-
-        fig.update_traces(
-            mode="lines+markers+text",
-            line=dict(color='#00f2ff', width=4, shape='spline'),
-            marker=dict(size=12, color='#00f2ff', symbol='diamond', line=dict(color='#ffffff', width=2)),
-            fillgradient=dict(type="vertical", colorscale=[(0, "rgba(0,242,255,0.5)"), (1, "rgba(0,242,255,0)")]),
-            textposition="top center",
-            textfont=dict(family="Orbitron", size=14, color="#00f2ff")
-        )
-
-        fig.update_layout(
-            hovermode="x unified",
-            font=dict(family="Exo 2", color="#ffffff"),
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            margin=dict(l=0, r=0, t=30, b=0),
-            xaxis=dict(showgrid=True, gridcolor='rgba(0,242,255,0.1)', tickfont=dict(family="Orbitron", color="#00f2ff")),
-            yaxis=dict(showgrid=True, gridcolor='rgba(0,242,255,0.1)', title="Maydon (ga)", tickfont=dict(family="Orbitron", color="#00f2ff")),
-            shapes=[dict(type="rect", xref="paper", yref="paper", x0=0, y0=0, x1=1, y1=1, line=dict(color="rgba(0,242,255,0.2)", width=2))]
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-        # --- 📑 KENGAYTIRILGAN INTELLIGENT EKSPERT XULOSASI ---
-        risk_color = "#ff4b4b" if aero > 15 else "#ffaa00" if aero > 5 else "#00f2ff"
-        risk_text = "YUQORI (KRITIK)" if aero > 15 else "O'RTA (EHTIYOTKOR)" if aero > 5 else "BARQAROR (XAVFSIZ)"
-        report_id = f"AMU-{datetime.now().strftime('%Y%m%d')}-PRO"
-
-        if aero > 15:
-            analysis_details = f"Tizim oxirgi 7 yil ichida daryo o'zanining keskin o'zgarishini qayd etdi. <b>{aero} gektar</b> yerning yo'qolishi qirg'oqning strukturaviy yemirilishidan dalolat beradi."
-            detailed_advice = """<li>Daryo qirg'og'ini beton va gabionlar bilan mustahkamlash.</li><li>Xavfli zonada qurilishni to'xtatish.</li>"""
-        elif aero > 5:
-            analysis_details = f"Hududda o'rtacha eroziya kuzatilmoqda. <b>{aero} gektar</b> maydon yuvilib ketgan."
-            detailed_advice = """<li>Qirg'oqqa tol va terak ekish (yashil qalqon).</li><li>Muntazam monitoring.</li>"""
-        else:
-            analysis_details = f"Hudud barqaror holatda. <b>{aero} gektarlik</b> o'zgarish tabiiy jarayon."
-            detailed_advice = """<li>Tabiiy landshaftni muhofaza qilish.</li><li>Datchiklar ornatish.</li>"""
-
-        full_html = f"""
-        <div style="border-left: 10px solid {risk_color}; background: rgba(10, 25, 47, 0.95); padding: 25px; border-radius: 15px; color: white;">
-            <h3 style='color: {risk_color}; margin: 0;'>📑 EKSPERTIZANING RASMIY BAYONNOMASI</h3>
-            <p style="font-size: 0.8rem; color: #888;">ID: {report_id}</p>
-            <div style="margin-top: 10px;">
-                <p><b>XAVF DARAJASI:</b> <span style="color:{risk_color};">{risk_text}</span></p>
-                <hr style="opacity: 0.1;">
-                <p><b>🔍 ANALIZ NATIJASI:</b><br>{analysis_details}</p>
-                <div style="margin-top: 15px;">
-                    <b>💡 KOMPLEKS TAVSIYALAR:</b>
-                    <ul style="padding-left: 20px;">{detailed_advice}</ul>
-                </div>
-            </div>
-        </div>
-        """
-        st.markdown(full_html, unsafe_allow_html=True)
-
-if st.sidebar.button("🔌 TIZIMNI O'CHIRISH"):
-    st.session_state.auth = False
-    st.session_state.analysis_results = None
-    st.rerun()
+            st.markdown(f"<div class='metric-card'>{L['area_label']}: {a1} GA</div>", unsafe
