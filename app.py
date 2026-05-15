@@ -143,7 +143,7 @@ st.session_state.lang = st.sidebar.selectbox("🌐 Choose Language / Tilni tanla
 L = text_db[st.session_state.lang]
 st.sidebar.markdown(f"### {L['sidebar']}")
 
-# --- 🧠 MUKAMMAL ANALIZ ALGORITMI (Yangilangan Mantiq) ---
+# --- 🧠 MUKAMMAL ANALIZ ALGORITMI ---
 def analyze_full_spectrum(geometry):
     try:
         region_ee = geometry.bounds()
@@ -154,33 +154,31 @@ def analyze_full_spectrum(geometry):
         img_old, img_now = fetch_img(datetime.now().year - 5), fetch_img(datetime.now().year)
         if not img_old or not img_now: return "Tasvirlar topilmadi."
 
-        # Suv maskalari (NDWI - normalized difference water index)
+        # Suv maskalari (NDWI)
         mask_old, mask_now = img_old.normalizedDifference(['B3', 'B8']).gt(0.05), img_now.normalizedDifference(['B3', 'B8']).gt(0.05)
         
-        # 1. Yuvilgan joylar (Sariq)
+        # 1. Yuvilgan joylar (Sariq) - FAQAT hozirgi suv o'zani bo'lmagan hudud bilan cheklaymiz
         erosion = mask_old.And(mask_now.Not()).selfMask()
         
-        # 2. Bashorat (Qizil) - Eroziya nuqtalaridan boshlanuvchi xavf zonasi
-        # Radius 80 o'rniga dinamikroq qilingan
+        # 2. Bashorat (Qizil) - Eroziyadan keyingi quruqlik xavfi
+        # TUZATISH: .And(mask_now.Not()) filtri yanada qat'iy qo'llandi
         future_risk = erosion.focal_max(radius=45, units='meters').And(mask_now.Not()).selfMask()
 
         def calc_area(m):
             try:
-                # 'nd' o'rniga reducer natijasini to'g'ridan-to'g'ri olish uchun values() ishlatamiz
                 area = m.multiply(ee.Image.pixelArea()).reduceRegion(reducer=ee.Reducer.sum(), geometry=region_ee, scale=20, maxPixels=1e10)
                 res = area.values().get(0)
                 return int(ee.Number(res).divide(10000).round().getInfo())
             except: return 0
 
         a1, a2, aero = calc_area(mask_old), calc_area(mask_now), calc_area(erosion)
-        
-        # MUHIM TUZATISH: Bashorat maydoni endi yuvilgan maydonning 1.4 baravari (mantiqiy o'sish)
         af = int(aero * 1.4) if aero > 0 else int(a2 * 0.05)
 
         v = {'bands': ['B4', 'B3', 'B2'], 'min': 0, 'max': 3000, 'gamma': 1.4}
         p = {'region': region_ee.getInfo()['coordinates'], 'dimensions': 800, 'format': 'png'}
         
         u1 = img_old.visualize(**v).getThumbURL(p)
+        # Blend qismida mask_now'dan butunlay tozalash (Suv ustiga rang chiqmasligi uchun)
         u2 = img_now.visualize(**v).blend(erosion.visualize(palette=['#ffff00'], opacity=0.8)).getThumbURL(p)
         u3 = img_now.visualize(**v).blend(future_risk.visualize(palette=['#ff0000'], opacity=0.7)).getThumbURL(p)
         
@@ -189,7 +187,6 @@ def analyze_full_spectrum(geometry):
 
 # --- 📑 EKSPERT XULOSASI FUNKSIYASI ---
 def render_expert_report(aero, lang):
-    # Aero (yuvilgan maydon) qiymatiga qarab rang va daraja
     risk_color = "#ff4b4b" if aero > 15 else "#ffaa00" if aero > 5 else "#00f2ff"
     r_t = L['status'][0] if aero > 15 else L['status'][1] if aero > 5 else L['status'][2]
     
@@ -251,7 +248,6 @@ if st.session_state.analysis_results and not isinstance(st.session_state.analysi
             st.image(imgs[i], use_container_width=True)
             st.markdown(f"<div class='metric-card'>{L['area']}: {vals[i]} GA</div>", unsafe_allow_html=True)
 
-    # --- 📑 EKSPERT XULOSASINI CHAQIRISH ---
     st.divider()
     render_expert_report(aero, st.session_state.lang)
 
