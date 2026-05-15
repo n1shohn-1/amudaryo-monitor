@@ -6,9 +6,9 @@ import plotly.express as px
 from datetime import datetime
 import folium
 from streamlit_folium import st_folium
-from geopy.geocoders import Nominatim  # Yangi: Manzilni aniqlash uchun
+from geopy.geocoders import Nominatim
 
-# 1. SAHIFA SOZLAMALARI
+# 1. SAHIFA SOZLAMALARI (Har doim eng yuqorida bo'lishi kerak)
 st.set_page_config(
     page_title="Amudaryo AI-Predictor Pro",
     page_icon="🛰",
@@ -95,39 +95,39 @@ text_db = {
     }
 }
 
-# --- 🎨 DINAMIK NEON DIZAYN ---
-st.markdown(f"""
+# --- 🎨 DINAMIK NEON DIZAYN (Qavslar xatosi to'g'irlandi) ---
+st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Exo+2:wght@300;600&display=swap');
-    .stApp {{
+    .stApp {
         background: linear-gradient(rgba(0, 0, 0, 0.85), rgba(0, 0, 0, 0.85)), 
                     url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1920&q=80');
         background-size: cover; background-attachment: fixed;
         color: #ffffff; font-family: 'Exo 2', sans-serif;
-    }}
-    .metric-card {{
+    }
+    .metric-card {
         background: rgba(16, 33, 65, 0.7); padding: 20px; border-radius: 15px;
         border: 1px solid #00f2ff; text-align: center;
         transition: transform 0.3s ease, box-shadow 0.3s ease;
-    }}
-    .metric-card:hover {{
+    }
+    .metric-card:hover {
         transform: translateY(-5px) scale(1.02);
         box-shadow: 0 0 25px rgba(0, 242, 255, 0.4);
         background: rgba(16, 33, 65, 0.9);
-    }}
-    h1, h2, h3 {{ font-family: 'Orbitron', sans-serif !important; color: #00f2ff !important; }}
-    .stButton>button {{
+    }
+    h1, h2, h3 { font-family: 'Orbitron', sans-serif !important; color: #00f2ff !important; }
+    .stButton>button {
         width: 100%; background: transparent !important; color: #00f2ff !important;
         border: 2px solid #00f2ff !important; font-family: 'Orbitron', sans-serif;
         border-radius: 10px; transition: 0.4s;
-    }}
-    .stButton>button:hover {{
+    }
+    .stButton>button:hover {
         background: #00f2ff !important; color: #000 !important;
         box-shadow: 0 0 20px #00f2ff; transform: scale(1.02);
-    }}
-    .loc-box {{
+    }
+    .loc-box {
         background: rgba(0, 242, 255, 0.1); padding: 10px; border-radius: 10px; border: 1px dashed #00f2ff; margin-bottom: 20px;
-    }}
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -153,7 +153,7 @@ st.sidebar.markdown(f"### {L['sidebar']}")
 # --- 🛰 HUDUD NOMINI ANIQLASH (GEO-CODING) ---
 def get_location_details(coords):
     try:
-        geolocator = Nominatim(user_agent="amudaryo_monitor")
+        geolocator = Nominatim(user_agent="amudaryo_monitor_pro")
         location = geolocator.reverse(f"{coords[1]}, {coords[0]}", timeout=10)
         return location.address if location else "Noma'lum hudud"
     except:
@@ -163,17 +163,20 @@ def get_location_details(coords):
 def analyze_full_spectrum(geometry):
     try:
         region_ee = geometry.bounds()
-        centroid = geometry.centroid().coordinates().getInfo() # Markaziy koordinatalar
-        address = get_location_details(centroid)
+        centroid_data = geometry.centroid().coordinates().getInfo() 
+        address = get_location_details(centroid_data)
 
         def fetch_img(year):
             col = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED").filterBounds(region_ee).filterDate(f'{year}-01-01', f'{year}-12-31').sort('CLOUDY_PIXEL_PERCENTAGE')
             return col.first().clip(region_ee) if col.first() else None
 
-        img_old, img_now = fetch_img(datetime.now().year - 5), fetch_img(datetime.now().year)
+        img_old = fetch_img(datetime.now().year - 5)
+        img_now = fetch_img(datetime.now().year)
+        
         if not img_old or not img_now: return "Tasvirlar topilmadi."
 
-        mask_old, mask_now = img_old.normalizedDifference(['B3', 'B8']).gt(0.05), img_now.normalizedDifference(['B3', 'B8']).gt(0.05)
+        mask_old = img_old.normalizedDifference(['B3', 'B8']).gt(0.05)
+        mask_now = img_now.normalizedDifference(['B3', 'B8']).gt(0.05)
         erosion = mask_old.And(mask_now.Not()).selfMask()
         future_risk = erosion.focal_max(radius=45, units='meters').And(mask_now.Not()).selfMask()
 
@@ -181,6 +184,7 @@ def analyze_full_spectrum(geometry):
             try:
                 area = m.multiply(ee.Image.pixelArea()).reduceRegion(reducer=ee.Reducer.sum(), geometry=region_ee, scale=20, maxPixels=1e10)
                 res = area.values().get(0)
+                if res is None: return 0
                 return int(ee.Number(res).divide(10000).round().getInfo())
             except: return 0
 
@@ -194,7 +198,7 @@ def analyze_full_spectrum(geometry):
         u2 = img_now.visualize(**v).blend(erosion.visualize(palette=['#ffff00'], opacity=0.8)).getThumbURL(p)
         u3 = img_now.visualize(**v).blend(future_risk.visualize(palette=['#ff0000'], opacity=0.7)).getThumbURL(p)
         
-        return u1, u2, u3, a1, a2, af, aero, centroid, address
+        return u1, u2, u3, a1, a2, af, aero, centroid_data, address
     except Exception as e: return f"Error: {e}"
 
 # --- 📑 EKSPERT XULOSASI FUNKSIYASI ---
@@ -268,20 +272,19 @@ map_output = st_folium(m, width="100%", height=400)
 
 if map_output['last_active_drawing']:
     if st.button(L['btn']):
-        with st.spinner("🛰 Sun'iy intellekt tahlil qilmoqda..."):
-            res = analyze_full_spectrum(ee.Geometry.Polygon(map_output['last_active_drawing']['geometry']['coordinates'][0]))
-            st.session_state.analysis_results = res
+        with st.spinner("🛰 AI Tahlil qilmoqda..."):
+            coords = map_output['last_active_drawing']['geometry']['coordinates'][0]
+            geom = ee.Geometry.Polygon(coords)
+            st.session_state.analysis_results = analyze_full_spectrum(geom)
 
 if st.session_state.analysis_results and not isinstance(st.session_state.analysis_results, str):
-    u1, u2, u3, a1, a2, af, aero, centroid, address = st.session_state.analysis_results
+    u1, u2, u3, a1, a2, af, aero, cent, addr = st.session_state.analysis_results
     
-    # Hudud ma'lumotlarini qisqacha chiqarish
-    st.markdown(f"<div class='loc-box'><b>{L['loc_info']}:</b> {address} | {centroid[1]:.4f}, {centroid[0]:.4f}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='loc-box'><b>{L['loc_info']}:</b> {addr} | {cent[1]:.4f}, {cent[0]:.4f}</div>", unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns(3)
     titles = [L['history'], L['wash'], L['forecast']]
-    imgs = [u1, u2, u3]
-    vals = [a1, aero, af]
+    imgs, vals = [u1, u2, u3], [a1, aero, af]
     
     for i, col in enumerate([col1, col2, col3]):
         with col:
@@ -290,7 +293,7 @@ if st.session_state.analysis_results and not isinstance(st.session_state.analysi
             st.markdown(f"<div class='metric-card'>{L['area']}: {vals[i]} GA</div>", unsafe_allow_html=True)
 
     st.divider()
-    render_expert_report(aero, st.session_state.lang, address, centroid)
+    render_expert_report(aero, st.session_state.lang, addr, cent)
 
 if st.sidebar.button(L['logout']):
     st.session_state.auth = False
