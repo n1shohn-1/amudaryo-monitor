@@ -5,3 +5,4 @@ plotly
 geemap
 streamlit-folium
 folium
+geopy
