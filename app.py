@@ -182,7 +182,6 @@ def get_location_details(coords, lang_name):
     try:
         mapping = {"O'zbekcha": "uz", "Русский": "ru", "English": "en"}
         geolocator = Nominatim(user_agent="amudaryo_monitor_pro")
-        # Tanlangan tilda manzilni so'raymiz
         location = geolocator.reverse(f"{coords[1]}, {coords[0]}", timeout=10, language=mapping.get(lang_name, "en"))
         return location.address if location else "Noma'lum hudud"
     except:
@@ -245,7 +244,6 @@ def render_expert_report(aero, change_rate, lang_code, address, centroid):
 
     r_t = lang_dict['status'][status_idx]
     
-    # Ma'lumotlarni tilda chiqarish uchun lug'at
     desc = {
         "O'zbekcha": f"Oxirgi 5 yillik tahlil shuni ko'rsatadiki, hududning {change_rate:.1f}% qismi gidrologik eroziyaga uchragan. {address} hududida jami {aero} GA maydon yo'qotilgan.",
         "Русский": f"Анализ за последние 5 лет показывает, что {change_rate:.1f}% территории подверглось гидрологической эрозии. В районе {address} потеряно {aero} га.",
@@ -288,25 +286,36 @@ if map_output['last_active_drawing']:
             geom = ee.Geometry.Polygon(coords)
             st.session_state.analysis_results = analyze_full_spectrum(geom)
 
-if st.session_state.analysis_results and not isinstance(st.session_state.analysis_results, str):
-    u1, u2, u3, a1, a2, af, aero, c_rate, cent, addr = st.session_state.analysis_results
-    f_coords = format_coords_by_lang(cent[1], cent[0], L)
-    
-    st.markdown(f"<div class='loc-box'><b>{L['loc_info']}:</b> {addr} | {f_coords}</div>", unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns(3)
-    titles = [L['history'], L['wash'], L['forecast']]
-    imgs, vals = [u1, u2, u3], [a1, aero, af]
-    
-    for i, col in enumerate([col1, col2, col3]):
-        with col:
-            st.markdown(f"<p style='text-align:center; font-weight:bold;'>{titles[i]}</p>", unsafe_allow_html=True)
-            st.image(imgs[i], use_container_width=True)
-            st.markdown(f"<div class='metric-card'>{L['area']}: {vals[i]} GA</div>", unsafe_allow_html=True)
+# --- NATIJALARNI CHIQARISH QISMI (XAVFSIZ INTEGRATSIYA) ---
+if st.session_state.analysis_results:
+    if isinstance(st.session_state.analysis_results, str):
+        st.error(f"Tahlil jarayonida xatolik: {st.session_state.analysis_results}")
+    else:
+        try:
+            # Qiymatlarni xavfsiz ochib olamiz (Unpacking)
+            u1, u2, u3, a1, a2, af, aero, c_rate, cent, addr = st.session_state.analysis_results
+            
+            # Hududiy ma'lumot qutisi
+            f_coords = format_coords_by_lang(cent[1], cent[0], L)
+            st.markdown(f"<div class='loc-box'><b>{L['loc_info']}:</b> {addr} | {f_coords}</div>", unsafe_allow_html=True)
+            
+            # Rasmlar va Maydon kartalarini chiqarish
+            col1, col2, col3 = st.columns(3)
+            titles = [L['history'], L['wash'], L['forecast']]
+            imgs, vals = [u1, u2, u3], [a1, aero, af]
+            
+            for i, col in enumerate([col1, col2, col3]):
+                with col:
+                    st.markdown(f"<p style='text-align:center; font-weight:bold;'>{titles[i]}</p>", unsafe_allow_html=True)
+                    st.image(imgs[i], use_container_width=True)
+                    st.markdown(f"<div class='metric-card'>{L['area']}: {vals[i]} GA</div>", unsafe_allow_html=True)
 
-    st.divider()
-    # Yangilangan ekspert xulosasini chiqarish
-    render_expert_report(aero, c_rate, st.session_state.lang, addr, cent)
+            st.divider()
+            # Ekspert xulosasini chiqarish
+            render_expert_report(aero, c_rate, st.session_state.lang, addr, cent)
+            
+        except ValueError:
+            st.warning("Ma'lumotlar formati mos kelmadi yoki noto'liq. Iltimos, hududni qaytadan tanlab tahlil qiling.")
 
 if st.sidebar.button(L['logout']):
     st.session_state.auth = False
