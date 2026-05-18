@@ -173,7 +173,7 @@ if not st.session_state.auth:
             else: st.error("Xato!")
     st.stop()
 
-# --- 🌐 TILNI TANLASH VAL SIDEBAR ---
+# --- 🌐 TILNI TANLASH VA SIDEBAR ---
 st.session_state.lang = st.sidebar.selectbox("🌐 Choose Language / Tilni tanlang", ["O'zbekcha", "Русский", "English"])
 L = text_db[st.session_state.lang]
 st.sidebar.markdown(f"### {L['sidebar']}")
@@ -206,7 +206,7 @@ def get_location_details(coords, lang_name):
     except:
         return "Amudaryo havzasi yaqinidagi qirg'oq hududi"
 
-# --- 🧠 MUKAMMAL ANALIZ ALGORITMI (DINAMIK MULTI-MISSION BILAN) ---
+# --- 🧠 MUKAMMAL ANALIZ ALGORITMI (NAFIS VA SILLIQ FILTRLAR INTEGRATSIYASI) ---
 def analyze_full_spectrum(geometry, p_year, f_years):
     try:
         region_ee = geometry.bounds()
@@ -229,17 +229,26 @@ def analyze_full_spectrum(geometry, p_year, f_years):
             # Landsat 7 Missiyasi (2015 va undan oldingi yillar uchun barqaror ma'lumotlar bazasi)
             col_old = ee.ImageCollection("LANDSAT/LE07/C02/T1_L2").filterBounds(region_ee).filterDate(f'{p_year}-01-01', f'{p_year}-12-31').sort('CLOUD_COVER')
             img_old = col_old.first().clip(region_ee) if col_old.first() else None
-            # Landsat 7 uchun NDWI filtri (Green: SR_B2, NIR: SR_B4)
             mask_old = img_old.normalizedDifference(['SR_B2', 'SR_B4']).gt(0.05) if img_old else None
             v_params = {'bands': ['SR_B3', 'SR_B2', 'SR_B1'], 'min': 7000, 'max': 12000, 'gamma': 1.4}
 
         if not img_old or not img_now: return "Tasvirlar topilmadi."
 
-        erosion = mask_old.And(mask_now.Not()).selfMask()
+        # Dastlabki qo'pol chiziqli eroziya maskasi
+        raw_erosion = mask_old.And(mask_now.Not())
         
-        # Kelajak xavf radiusini foydalanuvchi slayderda tanlagan yiliga qarab dinamik kengaytirish (Har bir yil uchun ~9.5 metr)
+        # ✨ CHIZIQLARNI AKKURATNIY VA NAFIS QILUVCHI ARXITEKTURA FILTRI (SMOOTHING ENGINE)
+        # Gausian Kernel yordamida piksellar orasidagi qo'pol burilishlarni yumshoq va silliq bog'lash
+        gaussian_kernel = ee.Kernel.gaussian(radius=2, sigma=1, units='pixels')
+        smooth_erosion = raw_erosion.convolve(gaussian_kernel).gt(0.4)
+        
+        # Tarqoq va mayda xunuk piksellarni yo'qotib, qirg'oq chiziqlarini yaxlit nafis holatga keltirish
+        smooth_erosion = smooth_erosion.focal_max(radius=1.5, units='pixels').focal_min(radius=1.5, units='pixels').selfMask()
+
+        # Kelajak xavf radiusini hisoblash va uni ham professional darajada silliqlash
         calculated_radius = f_years * 9.5
-        future_risk = erosion.focal_max(radius=calculated_radius, units='meters').And(mask_now.Not()).selfMask()
+        raw_future_risk = raw_erosion.focal_max(radius=calculated_radius, units='meters').And(mask_now.Not())
+        smooth_future_risk = raw_future_risk.convolve(gaussian_kernel).gt(0.4).selfMask()
 
         def calc_area(m):
             try:
@@ -249,7 +258,7 @@ def analyze_full_spectrum(geometry, p_year, f_years):
                 return int(ee.Number(res).divide(10000).round().getInfo())
             except: return 0
 
-        a1, a2, aero = calc_area(mask_old), calc_area(mask_now), calc_area(erosion)
+        a1, a2, aero = calc_area(mask_old), calc_area(mask_now), calc_area(smooth_erosion)
         
         # Bashorat maydonining dinamik matematik koeffitsiyenti
         af = int(aero * (1.0 + (f_years * 0.08))) if aero > 0 else int(a2 * (f_years * 0.012))
@@ -260,8 +269,10 @@ def analyze_full_spectrum(geometry, p_year, f_years):
         u1 = img_old.visualize(**v_params).getThumbURL(p)
         
         v_now = {'bands': ['B4', 'B3', 'B2'], 'min': 0, 'max': 3000, 'gamma': 1.4}
-        u2 = img_now.visualize(**v_now).blend(erosion.visualize(palette=['#ffff00'], opacity=0.8)).getThumbURL(p)
-        u3 = img_now.visualize(**v_now).blend(future_risk.visualize(palette=['#ff0000'], opacity=0.7)).getThumbURL(p)
+        
+        # Rang qatlamlarini xarita bilan ideal integratsiya qilish uchun shaffoflikni 'opacity=0.6' ga moslashtirdik
+        u2 = img_now.visualize(**v_now).blend(smooth_erosion.visualize(palette=['#ffff00'], opacity=0.6)).getThumbURL(p)
+        u3 = img_now.visualize(**v_now).blend(smooth_future_risk.visualize(palette=['#ff3333'], opacity=0.6)).getThumbURL(p)
         
         return u1, u2, u3, a1, a2, af, aero, change_rate, centroid_data, address
     except Exception as e: return f"Error: {e}"
@@ -299,7 +310,7 @@ def render_expert_report(aero, change_rate, lang_code, address, centroid, p_year
             <p style='font-size: 1.1rem; color: #00f2ff; font-style: italic;'>"{lang_dict['expert_advice'][advice_key]}"</p>
             <hr style='opacity: 0.1;'>
             <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #888;">
-                <span>Metod: Multi-Mission NDWI (Sentinel-2 / Landsat-7) Analysis</span>
+                <span>Metod: Multi-Mission NDWI (Hierarchical Smoothing & Morphological Filtering)</span>
                 <span>ID: AMU-{datetime.now().strftime('%d%m%H%M')}</span>
             </div>
         </div>
