@@ -248,13 +248,13 @@ def analyze_full_spectrum(geometry, p_year, f_years):
         smooth_erosion = raw_erosion.convolve(gaussian_kernel).gt(0.5)
         smooth_erosion = smooth_erosion.focal_mean(radius=1, units='pixels').selfMask()
 
-        # ✨ HAQIQIY KELAJAK BASHORATI MODELI (Takrorlanish mutlaqo yo'q qilindi!)
-        # Hozirgi daryo o'zanining eng chekka kontur qirg'oqlarini aniqlash
-        river_edges = mask_now.focal_max(radius=1, units='pixels').And(mask_now.focal_min(radius=1, units='pixels').Not())
+        # ✨ TUZATILGAN MUSTAHKAM KELAJAK BASHORATI MODELI (Qizil qatlam muammosi hal qilindi)
+        # Hozirgi daryo o'zanini to'g'ridan-to'g'ri tashqariga qarab kengaytiramiz (Uzunlik koeffitsiyenti)
+        calculated_radius = f_years * 12.5  
+        expanded_river = mask_now.focal_max(radius=calculated_radius, units='meters')
         
-        # Kelajak xavf hududi: Hozirgi qirg'oqdan quruqlik tomon kengayadi va SARIQ (o'tmishda yuvilgan) qatlamni o'z ichiga olmaydi!
-        calculated_radius = f_years * 11.5  # Ilmiy gidrologik eroziya koeffitsiyenti
-        raw_future_risk = river_edges.focal_max(radius=calculated_radius, units='meters').And(mask_now.Not()).And(smooth_erosion.Not())
+        # Kelajak xavf hududi: Kengaygan daryodan hozirgi daryoni va sariq o'tmish qatlamini ayirib tashlaymiz
+        raw_future_risk = expanded_river.And(mask_now.Not()).And(smooth_erosion.Not() if smooth_erosion else ee.Image(1))
         smooth_future_risk = raw_future_risk.convolve(gaussian_kernel).gt(0.4).selfMask()
 
         # Maydonlarni hisoblash
@@ -281,9 +281,9 @@ def analyze_full_spectrum(geometry, p_year, f_years):
         
         v_now = {'bands': ['B4', 'B3', 'B2'], 'min': 0, 'max': 3000, 'gamma': 1.2}
         
-        # Grafik qatlamlarni xaritalarga go'zal va aniq integratsiya qilish (Shaffoflik optimallashdi)
+        # Grafik qatlamlarni xaritalarga go'zal va aniq integratsiya qilish (Shaffoflik qizil kontur uchun 0.75 ga oshirildi)
         u2 = img_now.visualize(**v_now).blend(smooth_erosion.visualize(palette=['#ffff00'], opacity=0.65)).getThumbURL(p)
-        u3 = img_now.visualize(**v_now).blend(smooth_future_risk.visualize(palette=['#ff1111'], opacity=0.65)).getThumbURL(p)
+        u3 = img_now.visualize(**v_now).blend(smooth_future_risk.visualize(palette=['#ff0000'], opacity=0.75)).getThumbURL(p)
         
         return u1, u2, u3, a1, a2, af, aero, change_rate, centroid_data, address
     except Exception as e: return f"Error: {e}"
