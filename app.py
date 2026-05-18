@@ -38,7 +38,7 @@ if 'lang' not in st.session_state:
 if "auth" not in st.session_state:
     st.session_state.auth = False
 
-# --- 🌍 3-TILLI LUG'AT (YANGILANDI: Yo'nalishlar va Etiketlar qo'shildi) ---
+# --- 🌍 3-TILLI LUG'AT (DINAMIK SLAYDER MATNLARI QO'SHILDI) ---
 text_db = {
     "O'zbekcha": {
         "title": "🌊 AMUDARYO AI-MONITOR PRO",
@@ -63,7 +63,9 @@ text_db = {
         "expert_advice": {
             "critical": "Zudlik bilan qirg'oqni mustahkamlash uchun beton-gabion konstruksiyalarini o'rnatish va daryo o'zanini chuqurlashtirish tavsiya etiladi. Eroziya darajasi xavfli.",
             "stable": "Vaziyat barqaror. Monitoringni davom ettirish va daryo bo'yida tabiiy to'siqlar (tol, itshumurt) ekish maqsadga muvofiq."
-        }
+        },
+        "slider_past": "⏳ O'tmish davri (1 - 20 yil oldin?):",
+        "slider_future": "🔮 Bashorat davri (1 - 20 yildan keyin?):"
     },
     "Русский": {
         "title": "🌊 АМУДАРЬЯ AI-MONITOR PRO",
@@ -88,7 +90,9 @@ text_db = {
         "expert_advice": {
             "critical": "Рекомендуется немедленная установка бетонно-габионных конструкций и дноуглубительные работы. Скорость эрозии критическая.",
             "stable": "Ситуация стабильна. Рекомендуется посадка берегозащитных лесонасаждений и плановый мониторинг."
-        }
+        },
+        "slider_past": "⏳ Прошлый период (от 1 до 20 лет назад?):",
+        "slider_future": "🔮 Период прогноза (от 1 до 20 лет?):"
     },
     "English": {
         "title": "🌊 AMUDARYA AI-MONITOR PRO",
@@ -113,7 +117,9 @@ text_db = {
         "expert_advice": {
             "critical": "Immediate installation of gabion structures and riverbed dredging is highly recommended. Erosion rate is critical.",
             "stable": "The area is hydrologically stable. Continued monitoring and planting of riparian vegetation are recommended."
-        }
+        },
+        "slider_past": "⏳ Historical period (1 to 20 years ago?):",
+        "slider_future": "🔮 Forecast period (1 to 20 years later?):"
     }
 }
 
@@ -167,10 +173,18 @@ if not st.session_state.auth:
             else: st.error("Xato!")
     st.stop()
 
-# --- 🌐 TILNI TANLASH ---
+# --- 🌐 TILNI TANLASH VAL SIDEBAR ---
 st.session_state.lang = st.sidebar.selectbox("🌐 Choose Language / Tilni tanlang", ["O'zbekcha", "Русский", "English"])
 L = text_db[st.session_state.lang]
 st.sidebar.markdown(f"### {L['sidebar']}")
+
+# --- 🎛 DINAMIK 20 YILLIK SLAYDERLAR INTEGRATSIYASI ---
+st.sidebar.markdown("---")
+past_years = st.sidebar.slider(L["slider_past"], min_value=1, max_value=20, value=5, step=1)
+future_years = st.sidebar.slider(L["slider_future"], min_value=1, max_value=20, value=5, step=1)
+
+current_year = datetime.now().year
+target_past_year = current_year - past_years
 
 # --- 🧭 KOORDINATALARNI FORMATLASH ---
 def format_coords_by_lang(lat, lon, lang_dict):
@@ -178,11 +192,10 @@ def format_coords_by_lang(lat, lon, lang_dict):
     ew = lang_dict['directions']["E"] if lon >= 0 else lang_dict['directions']["W"]
     return f"{abs(lat):.6f}° {ns}, {abs(lon):.6f}° {ew}"
 
-# --- 🛰 HUDUD NOMINI ANIQLASH (TAHRIRLANDI: Bloklanishga qarshi xavfsizlik kuchaytirildi) ---
+# --- 🛰 HUDUD NOMINI ANIQLASH ---
 def get_location_details(coords, lang_name):
     try:
         mapping = {"O'zbekcha": "uz", "Русский": "ru", "English": "en"}
-        # Har safar random raqam qo'shiladi, shunda Nominatim serveri bot deb bloklamaydi
         rand_agent_id = random.randint(10000, 99999)
         geolocator = Nominatim(user_agent=f"amudaryo_monitor_pro_system_{rand_agent_id}")
         
@@ -191,56 +204,70 @@ def get_location_details(coords, lang_name):
             return location.address
         return "Amudaryo sohili hududi (Noma'lum manzil)"
     except:
-        # Server aloqa bermasa ham dastur qulab tushmaydi, zaxira matni qaytadi
         return "Amudaryo havzasi yaqinidagi qirg'oq hududi"
 
-# --- 🧠 MUKAMMAL ANALIZ ALGORITMI ---
-def analyze_full_spectrum(geometry):
+# --- 🧠 MUKAMMAL ANALIZ ALGORITMI (DINAMIK MULTI-MISSION BILAN) ---
+def analyze_full_spectrum(geometry, p_year, f_years):
     try:
         region_ee = geometry.bounds()
         centroid_data = geometry.centroid().coordinates().getInfo() 
         address = get_location_details(centroid_data, st.session_state.lang)
 
-        def fetch_img(year):
-            col = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED").filterBounds(region_ee).filterDate(f'{year}-01-01', f'{year}-12-31').sort('CLOUDY_PIXEL_PERCENTAGE')
-            return col.first().clip(region_ee) if col.first() else None
+        # Hozirgi yil tasviri (Sentinel-2)
+        col_now = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED").filterBounds(region_ee).filterDate(f'{current_year}-01-01', f'{current_year}-12-31').sort('CLOUDY_PIXEL_PERCENTAGE')
+        img_now = col_now.first().clip(region_ee) if col_now.first() else None
+        mask_now = img_now.normalizedDifference(['B3', 'B8']).gt(0.05) if img_now else None
 
-        img_old = fetch_img(datetime.now().year - 5)
-        img_now = fetch_img(datetime.now().year)
-        
+        # O'tmish yili uchun sun'iy yo'ldosh missiyasini moslashtirish mantiqi
+        if p_year >= 2016:
+            # Sentinel-2 Missiyasi
+            col_old = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED").filterBounds(region_ee).filterDate(f'{p_year}-01-01', f'{p_year}-12-31').sort('CLOUDY_PIXEL_PERCENTAGE')
+            img_old = col_old.first().clip(region_ee) if col_old.first() else None
+            mask_old = img_old.normalizedDifference(['B3', 'B8']).gt(0.05) if img_old else None
+            v_params = {'bands': ['B4', 'B3', 'B2'], 'min': 0, 'max': 3000, 'gamma': 1.4}
+        else:
+            # Landsat 7 Missiyasi (2015 va undan oldingi yillar uchun barqaror ma'lumotlar bazasi)
+            col_old = ee.ImageCollection("LANDSAT/LE07/C02/T1_L2").filterBounds(region_ee).filterDate(f'{p_year}-01-01', f'{p_year}-12-31').sort('CLOUD_COVER')
+            img_old = col_old.first().clip(region_ee) if col_old.first() else None
+            # Landsat 7 uchun NDWI filtri (Green: SR_B2, NIR: SR_B4)
+            mask_old = img_old.normalizedDifference(['SR_B2', 'SR_B4']).gt(0.05) if img_old else None
+            v_params = {'bands': ['SR_B3', 'SR_B2', 'SR_B1'], 'min': 7000, 'max': 12000, 'gamma': 1.4}
+
         if not img_old or not img_now: return "Tasvirlar topilmadi."
 
-        mask_old = img_old.normalizedDifference(['B3', 'B8']).gt(0.05)
-        mask_now = img_now.normalizedDifference(['B3', 'B8']).gt(0.05)
         erosion = mask_old.And(mask_now.Not()).selfMask()
-        future_risk = erosion.focal_max(radius=45, units='meters').And(mask_now.Not()).selfMask()
+        
+        # Kelajak xavf radiusini foydalanuvchi slayderda tanlagan yiliga qarab dinamik kengaytirish (Har bir yil uchun ~9.5 metr)
+        calculated_radius = f_years * 9.5
+        future_risk = erosion.focal_max(radius=calculated_radius, units='meters').And(mask_now.Not()).selfMask()
 
         def calc_area(m):
             try:
-                area = m.multiply(ee.Image.pixelArea()).reduceRegion(reducer=ee.Reducer.sum(), geometry=region_ee, scale=20, maxPixels=1e10)
+                area = m.multiply(ee.Image.pixelArea()).reduceRegion(reducer=ee.Reducer.sum(), geometry=region_ee, scale=30, maxPixels=1e10)
                 res = area.values().get(0)
                 if res is None: return 0
                 return int(ee.Number(res).divide(10000).round().getInfo())
             except: return 0
 
         a1, a2, aero = calc_area(mask_old), calc_area(mask_now), calc_area(erosion)
-        af = int(aero * 1.4) if aero > 0 else int(a2 * 0.05)
         
-        # Eroziya dinamikasi (%)
+        # Bashorat maydonining dinamik matematik koeffitsiyenti
+        af = int(aero * (1.0 + (f_years * 0.08))) if aero > 0 else int(a2 * (f_years * 0.012))
         change_rate = (aero / a1 * 100) if a1 > 0 else 0
 
-        v = {'bands': ['B4', 'B3', 'B2'], 'min': 0, 'max': 3000, 'gamma': 1.4}
         p = {'region': region_ee.getInfo()['coordinates'], 'dimensions': 800, 'format': 'png'}
         
-        u1 = img_old.visualize(**v).getThumbURL(p)
-        u2 = img_now.visualize(**v).blend(erosion.visualize(palette=['#ffff00'], opacity=0.8)).getThumbURL(p)
-        u3 = img_now.visualize(**v).blend(future_risk.visualize(palette=['#ff0000'], opacity=0.7)).getThumbURL(p)
+        u1 = img_old.visualize(**v_params).getThumbURL(p)
+        
+        v_now = {'bands': ['B4', 'B3', 'B2'], 'min': 0, 'max': 3000, 'gamma': 1.4}
+        u2 = img_now.visualize(**v_now).blend(erosion.visualize(palette=['#ffff00'], opacity=0.8)).getThumbURL(p)
+        u3 = img_now.visualize(**v_now).blend(future_risk.visualize(palette=['#ff0000'], opacity=0.7)).getThumbURL(p)
         
         return u1, u2, u3, a1, a2, af, aero, change_rate, centroid_data, address
     except Exception as e: return f"Error: {e}"
 
-# --- 📑 EKSPERT XULOSASI FUNKSIYASI ---
-def render_expert_report(aero, change_rate, lang_code, address, centroid):
+# --- 📑 EKSPERT XULOSASI FUNKSIYASI (YILLAR INTEGRATSIYASI BILAN) ---
+def render_expert_report(aero, change_rate, lang_code, address, centroid, p_year, f_years):
     lang_dict = text_db[lang_code]
     f_coords = format_coords_by_lang(centroid[1], centroid[0], lang_dict)
     
@@ -252,9 +279,9 @@ def render_expert_report(aero, change_rate, lang_code, address, centroid):
     r_t = lang_dict['status'][status_idx]
     
     desc = {
-        "O'zbekcha": f"Oxirgi 5 yillik tahlil shuni ko'rsatadiki, hududning {change_rate:.1f}% qismi gidrologik eroziyaga uchragan. {address} hududida jami {aero} GA maydon yo'qotilgan.",
-        "Русский": f"Анализ за последние 5 лет показывает, что {change_rate:.1f}% территории подверглось гидрологической эрозии. В районе {address} потеряно {aero} га.",
-        "English": f"Analysis over the last 5 years shows that {change_rate:.1f}% of the area has undergone hydrological erosion. A total of {aero} hectares lost in {address}."
+        "O'zbekcha": f"{p_year}-yildan buyon o'tkazilgan tahlillar shuni ko'rsatadiki, hudud qirg'oqlarining {change_rate:.1f}% qismi gidrologik eroziyaga uchragan. {address} hududida jami {aero} GA maydon yo'qotilgan. Navbatdagi {f_years} yillik dinamik model jiddiy deformatsiya xavfini aniqladi.",
+        "Русский": f"Анализ с {p_year} года показывает, что {change_rate:.1f}% береговой линии подверглось гидрологической эрозии. В районе {address} потеряно {aero} га. Динамическая модель на следующие {f_years} лет определила риски деформации.",
+        "English": f"Analysis since {p_year} shows that {change_rate:.1f}% of the coastline has undergone hydrological erosion. A total of {aero} hectares lost in {address}. The dynamic model for the next {f_years} years defined deformation risks."
     }
     
     st.markdown(f"""
@@ -266,13 +293,13 @@ def render_expert_report(aero, change_rate, lang_code, address, centroid):
             </div>
             <div style="display: flex; gap: 20px; margin-top: 10px;">
                 <p style="margin: 0;"><b>{lang_dict['risk']}:</b> <span style="color:{risk_color}; font-weight: bold;">{r_t}</span></p>
-                <p style="margin: 0;"><b>Eroziya dinamikasi:</b> <span style="color:{risk_color}; font-weight: bold;">{change_rate:.1f}%</span></p>
+                <p style="margin: 0;"><b>Eroziya dinamikasi ({p_year} - {current_year}):</b> <span style="color:{risk_color}; font-weight: bold;">{change_rate:.1f}%</span></p>
             </div>
             <p style='font-size: 1.05rem; line-height: 1.6; margin-top: 15px; color: #e0e0e0;'>{desc[lang_code]}</p>
             <p style='font-size: 1.1rem; color: #00f2ff; font-style: italic;'>"{lang_dict['expert_advice'][advice_key]}"</p>
             <hr style='opacity: 0.1;'>
             <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #888;">
-                <span>Metod: NDWI Sentinel-2 L2A Multispectral Analysis</span>
+                <span>Metod: Multi-Mission NDWI (Sentinel-2 / Landsat-7) Analysis</span>
                 <span>ID: AMU-{datetime.now().strftime('%d%m%H%M')}</span>
             </div>
         </div>
@@ -291,24 +318,26 @@ if map_output['last_active_drawing']:
         with st.spinner("🛰 AI Tahlil qilmoqda..."):
             coords = map_output['last_active_drawing']['geometry']['coordinates'][0]
             geom = ee.Geometry.Polygon(coords)
-            st.session_state.analysis_results = analyze_full_spectrum(geom)
+            # Parametrlarga slayderlardan kelayotgan dinamik yillar uzatiladi
+            st.session_state.analysis_results = analyze_full_spectrum(geom, target_past_year, future_years)
 
-# --- NATIJALARNI CHIQARISH QISMI (TAHRIRLANDI: Xavfsiz integratsiya va xatoliklar filtri) ---
+# --- NATIJALARNI CHIQARISH QISMI ---
 if st.session_state.analysis_results:
     if isinstance(st.session_state.analysis_results, str):
         st.error(f"Tahlil jarayonida xatolik: {st.session_state.analysis_results}")
     else:
         try:
-            # Qiymatlarni xavfsiz ochib olamiz (Unpacking)
             u1, u2, u3, a1, a2, af, aero, c_rate, cent, addr = st.session_state.analysis_results
             
-            # Hududiy ma'lumot qutisi (Barcha hududlarda xizmat javob bermasa ham to'g'ri ishlaydi)
             f_coords = format_coords_by_lang(cent[1], cent[0], L)
             st.markdown(f"<div class='loc-box'><b>{L['loc_info']}:</b> {addr} | {f_coords}</div>", unsafe_allow_html=True)
             
-            # Rasmlar va Maydon kartalarini chiqarish
+            # Dinamik ravishda tanlangan o'tmish va kelajak yillariga mos sarlavhalar hosil qilish
+            dynamic_past_title = f"{L['history']} ({target_past_year})"
+            dynamic_future_title = f"{L['forecast']} (+{future_years} YIL)"
+            
             col1, col2, col3 = st.columns(3)
-            titles = [L['history'], L['wash'], L['forecast']]
+            titles = [dynamic_past_title, L['wash'], dynamic_future_title]
             imgs, vals = [u1, u2, u3], [a1, aero, af]
             
             for i, col in enumerate([col1, col2, col3]):
@@ -318,8 +347,8 @@ if st.session_state.analysis_results:
                     st.markdown(f"<div class='metric-card'>{L['area']}: {vals[i]} GA</div>", unsafe_allow_html=True)
 
             st.divider()
-            # Ekspert xulosasini chiqarish
-            render_expert_report(aero, c_rate, st.session_state.lang, addr, cent)
+            # Ekspert xulosasiga ham dinamik yillar yuboriladi
+            render_expert_report(aero, c_rate, st.session_state.lang, addr, cent, target_past_year, future_years)
             
         except ValueError:
             st.warning("Ma'lumotlar formati mos kelmadi yoki noto'liq. Iltimos, hududni qaytadan tanlab tahlil qiling.")
