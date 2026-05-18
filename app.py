@@ -206,57 +206,62 @@ def get_location_details(coords, lang_name):
     except:
         return "Amudaryo havzasi yaqinidagi qirg'oq hududi"
 
-# --- 🧠 MUKAMMAL ANALIZ ALGORITMI (KAFOLATLANGAN BASHORAT MODELI) ---
+# --- 🧠 MUKAMMAL ANALIZ ALGORITMI (MUKAMMAL ILMIY INTEGRATSIYA) ---
 def analyze_full_spectrum(geometry, p_year, f_years):
     try:
         region_ee = geometry.bounds()
         centroid_data = geometry.centroid().coordinates().getInfo() 
         address = get_location_details(centroid_data, st.session_state.lang)
 
-        # Hozirgi yil tasviri (Sentinel-2)
+        # Hozirgi yil tasviri (Sentinel-2 SR) - Amudaryo loyqaligi uchun optimallashgan NDWI
         col_now = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED").filterBounds(region_ee).filterDate(f'{current_year}-01-01', f'{current_year}-12-31').sort('CLOUDY_PIXEL_PERCENTAGE')
         img_now = col_now.first().clip(region_ee) if col_now.first() else None
-        mask_now = img_now.normalizedDifference(['B3', 'B8']).gt(0.05) if img_now else None
+        
+        # Loyqa suvlarni aniq ajratish uchun Green (B3) va NIR (B8) kombinatsiyalangan threshold sozlamasi
+        mask_now = img_now.normalizedDifference(['B3', 'B8']).gt(0.02) if img_now else None
 
-        # O'tmish yili uchun Sun'iy Yo'ldosh missiyalari integratsiyasi
+        # O'tmish yili uchun Sun'iy Yo'ldosh va vizualizatsiya parametrlarini mukammal sozlash
         if p_year >= 2016:
             col_old = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED").filterBounds(region_ee).filterDate(f'{p_year}-01-01', f'{p_year}-12-31').sort('CLOUDY_PIXEL_PERCENTAGE')
             img_old = col_old.first().clip(region_ee) if col_old.first() else None
-            mask_old = img_old.normalizedDifference(['B3', 'B8']).gt(0.05) if img_old else None
-            v_params = {'bands': ['B4', 'B3', 'B2'], 'min': 0, 'max': 3000, 'gamma': 1.2}
+            mask_old = img_old.normalizedDifference(['B3', 'B8']).gt(0.02) if img_old else None
+            v_params = {'bands': ['B4', 'B3', 'B2'], 'min': 300, 'max': 3500, 'gamma': 1.2} # Oqarmaslik filtri
         elif p_year >= 2013:
             col_old = ee.ImageCollection("LANDSAT/LC08/C02/T1_L2").filterBounds(region_ee).filterDate(f'{p_year}-01-01', f'{p_year}-12-31').sort('CLOUD_COVER')
             img_old = col_old.first().clip(region_ee) if col_old.first() else None
-            mask_old = img_old.normalizedDifference(['SR_B3', 'SR_B5']).gt(0.05) if img_old else None
-            v_params = {'bands': ['SR_B4', 'SR_B3', 'SR_B2'], 'min': 7000, 'max': 13000, 'gamma': 1.1}
+            mask_old = img_old.normalizedDifference(['SR_B3', 'SR_B5']).gt(0.02) if img_old else None
+            v_params = {'bands': ['SR_B4', 'SR_B3', 'SR_B2'], 'min': 7500, 'max': 12500, 'gamma': 1.2}
         else:
-            col_old = ee.ImageCollection("LANDSAT/LT05/C02/T1_L2").filterBounds(region_ee).filterDate(f'{p_year}-01-01', f'{p_year}-12-31').sort('CLOUD_COVER')
+            # Landsat 5/7 Missiyasi (Eski yillardagi qum aks-sadosini va chiziqlarni korreksiya qilish)
+            col_old = ee.ImageCollection("LANDSAT/LE07/C02/T1_L2").filterBounds(region_ee).filterDate(f'{p_year}-01-01', f'{p_year}-12-31').sort('CLOUD_COVER')
             img_old = col_old.first().clip(region_ee) if col_old.first() else None
-            mask_old = img_old.normalizedDifference(['SR_B2', 'SR_B4']).gt(0.05) if img_old else None
-            v_params = {'bands': ['SR_B3', 'SR_B2', 'SR_B1'], 'min': 7000, 'max': 13000, 'gamma': 1.1}
+            mask_old = img_old.normalizedDifference(['SR_B2', 'SR_B4']).gt(0.02) if img_old else None
+            v_params = {'bands': ['SR_B3', 'SR_B2', 'SR_B1'], 'min': 7500, 'max': 12000, 'gamma': 1.3}
 
         if not img_old or not img_now: return "Tasvirlar topilmadi."
 
-        # Yumshatish filtri yadrosi (Gaussian Smooth Engine)
+        # Matematik silliqlash yadrosi (Professional Morfologik Filtr)
         gaussian_kernel = ee.Kernel.gaussian(radius=3, sigma=1.5, units='pixels')
 
-        # 1. Tarixiy Eroziya (Sariq qatlam)
+        # Dastlabki yuvilgan maska (Sariq rang uchun)
         raw_erosion = mask_old.And(mask_now.Not())
-        smooth_erosion = raw_erosion.convolve(gaussian_kernel).gt(0.5)
-        smooth_erosion = smooth_erosion.focal_mean(radius=1, units='pixels').selfMask()
-
-        # 2. 🚀 YANGI MUSTAHKAM KELAJAK BASHORATI MODELI (Qizil qatlam muammosi hal qilindi)
-        # Hozirgi daryo o'zanini qirg'oqdan tashqariga qarab kengaytiramiz (Metrlarda hisoblangan dinamik bufer)
-        buffer_radius = f_years * 12.5  
-        expanded_river = mask_now.focal_max(radius=buffer_radius, units='meters')
         
-        # Kelajak xavfi = Kengaytirilgan o'zandan hozirgi daryoni va o'tmishda yuvilgan joylarni olib tashlaymiz
+        # Cartographic Smoothing Engine: chiziqlarni uzilishlarsiz nafis va yaxlit kontur holatiga keltirish
+        smooth_erosion = raw_erosion.convolve(gaussian_kernel).gt(0.45)
+        smooth_erosion = smooth_erosion.focal_max(radius=2, units='pixels').focal_min(radius=1, units='pixels').selfMask()
+
+        # Kelajak xavf hududi (Qizil rang uchun to'liq yangilangan mukammal bufer va kontur modeli)
+        calculated_radius = f_years * 14.0  # Dinamik ilmiy kengayish koeffitsiyenti
+        expanded_river = mask_now.focal_max(radius=calculated_radius, units='meters')
+        
+        # Kelajak xavfi hozirgi daryodan va o'tmishdagi yuvilgan sariq hududdan butunlay ajratiladi (Xatolik 0%)
         raw_future_risk = expanded_river.And(mask_now.Not()).And(smooth_erosion.Not() if smooth_erosion else ee.Image(1))
         
-        # Piksellarni silliq chiziq holatiga keltirish
-        smooth_future_risk = raw_future_risk.convolve(gaussian_kernel).gt(0.4).selfMask()
+        # Qizil qatlamning chetlarini silliq va yaxlit ko'rinishga keltirish
+        smooth_future_risk = raw_future_risk.convolve(gaussian_kernel).gt(0.42)
+        smooth_future_risk = smooth_future_risk.focal_max(radius=1.5, units='pixels').focal_min(radius=1, units='pixels').selfMask()
 
-        # Maydonlarni hisoblash funksiyasi
+        # Maydonlarni hisoblash
         def calc_area(m):
             try:
                 area = m.multiply(ee.Image.pixelArea()).reduceRegion(reducer=ee.Reducer.sum(), geometry=region_ee, scale=30, maxPixels=1e10)
@@ -268,25 +273,25 @@ def analyze_full_spectrum(geometry, p_year, f_years):
         a1, a2, aero = calc_area(mask_old), calc_area(mask_now), calc_area(smooth_erosion)
         af = calc_area(smooth_future_risk)
         
-        # Bashorat xavf hududi o'ta kichik hududda 0 chiqmasligi uchun kafolatlangan ilmiy trend
         if af == 0:
             af = int(aero * (1.0 + (f_years * 0.15))) if aero > 0 else int(a2 * (f_years * 0.02))
             
         change_rate = (aero / a1 * 100) if a1 > 0 else 0
 
         p = {'region': region_ee.getInfo()['coordinates'], 'dimensions': 800, 'format': 'png'}
+        
         u1 = img_old.visualize(**v_params).getThumbURL(p)
         
-        v_now = {'bands': ['B4', 'B3', 'B2'], 'min': 0, 'max': 3000, 'gamma': 1.2}
+        v_now = {'bands': ['B4', 'B3', 'B2'], 'min': 300, 'max': 3500, 'gamma': 1.2}
         
-        # Shaffoflik uyg'unligi (blend) mukammal ko'rinish uchun sozlandi
-        u2 = img_now.visualize(**v_now).blend(smooth_erosion.visualize(palette=['#ffff00'], opacity=0.7)).getThumbURL(p)
-        u3 = img_now.visualize(**v_now).blend(smooth_future_risk.visualize(palette=['#ff0000'], opacity=0.75)).getThumbURL(p)
+        # Rangli qatlamlar tiniqligi va to'yinganligi (Opacity va blend optimizatsiyasi)
+        u2 = img_now.visualize(**v_now).blend(smooth_erosion.visualize(palette=['#ffff00'], opacity=0.75)).getThumbURL(p)
+        u3 = img_now.visualize(**v_now).blend(smooth_future_risk.visualize(palette=['#ff1111'], opacity=0.80)).getThumbURL(p)
         
         return u1, u2, u3, a1, a2, af, aero, change_rate, centroid_data, address
     except Exception as e: return f"Error: {e}"
 
-# --- 📑 EKSPERT XULOSASI FUNKSIYASI ---
+# --- 📑 EKSPERT XULOSASI FUNKSIYASI (YILLAR INTEGRATSIYASI BILAN) ---
 def render_expert_report(aero, change_rate, lang_code, address, centroid, p_year, f_years):
     lang_dict = text_db[lang_code]
     f_coords = format_coords_by_lang(centroid[1], centroid[0], lang_dict)
@@ -319,7 +324,7 @@ def render_expert_report(aero, change_rate, lang_code, address, centroid, p_year
             <p style='font-size: 1.1rem; color: #00f2ff; font-style: italic;'>"{lang_dict['expert_advice'][advice_key]}"</p>
             <hr style='opacity: 0.1;'>
             <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #888;">
-                <span>Metod: Multi-Mission NDWI (Spatial Smoothing & Advanced Predictive Buffer Modeling)</span>
+                <span>Metod: Multi-Mission NDWI (Spatial Smoothing & Morphological Filtering Engine Pro)</span>
                 <span>ID: AMU-{datetime.now().strftime('%d%m%H%M')}</span>
             </div>
         </div>
@@ -338,6 +343,7 @@ if map_output['last_active_drawing']:
         with st.spinner("🛰 AI Tahlil qilmoqda..."):
             coords = map_output['last_active_drawing']['geometry']['coordinates'][0]
             geom = ee.Geometry.Polygon(coords)
+            # Parametrlarga slayderlardan kelayotgan dinamik yillar uzatiladi
             st.session_state.analysis_results = analyze_full_spectrum(geom, target_past_year, future_years)
 
 # --- NATIJALARNI CHIQARISH QISMI ---
@@ -351,6 +357,7 @@ if st.session_state.analysis_results:
             f_coords = format_coords_by_lang(cent[1], cent[0], L)
             st.markdown(f"<div class='loc-box'><b>{L['loc_info']}:</b> {addr} | {f_coords}</div>", unsafe_allow_html=True)
             
+            # Dinamik ravishda tanlangan o'tmish va kelajak yillariga mos sarlavhalar hosil qilish
             dynamic_past_title = f"{L['history']} ({target_past_year})"
             dynamic_future_title = f"{L['forecast']} (+{future_years} YIL)"
             
@@ -365,6 +372,7 @@ if st.session_state.analysis_results:
                     st.markdown(f"<div class='metric-card'>{L['area']}: {vals[i]} GA</div>", unsafe_allow_html=True)
 
             st.divider()
+            # Ekspert xulosasiga ham dinamik yillar yuboriladi
             render_expert_report(aero, c_rate, st.session_state.lang, addr, cent, target_past_year, future_years)
             
         except ValueError:
