@@ -206,93 +206,43 @@ def get_location_details(coords, lang_name):
     except:
         return "Amudaryo havzasi yaqinidagi qirg'oq hududi"
 
-# --- 🧠 MUKAMMAL ANALIZ ALGORITMI (TINIQLASHTIRILGAN VARIANT) ---
+# --- 🧠 MUKAMMAL ANALIZ ALGORITMI ---
 def analyze_full_spectrum(geometry, p_year, f_years):
     try:
         region_ee = geometry.bounds()
         centroid_data = geometry.centroid().coordinates().getInfo() 
         address = get_location_details(centroid_data, st.session_state.lang)
 
-        # 1. HOZIRGI YIL TASVIRI: Ideal Median Composite va Bulutlardan Tozalash
-        col_now = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")\
-                    .filterBounds(region_ee)\
-                    .filterDate(f'{current_year}-04-01', f'{current_year}-10-31')\
-                    .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 15))
+        # Hozirgi yil tasviri (Sentinel-2 SR)
+        col_now = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED").filterBounds(region_ee).filterDate(f'{current_year}-01-01', f'{current_year}-12-31').sort('CLOUDY_PIXEL_PERCENTAGE')
+        img_now = col_now.first().clip(region_ee) if col_now.first() else None
         
-        if col_now.size().getInfo() > 0:
-            # Eng tiniq piksellarning median to'plamini hosil qilish
-            img_now = col_now.median().clip(region_ee)
-        else:
-            col_fallback = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED").filterBounds(region_ee).filterDate(f'{current_year}-01-01', f'{current_year}-12-31').sort('CLOUDY_PIXEL_PERCENTAGE')
-            img_now = col_fallback.first().clip(region_ee) if col_fallback.first() else None
-        
-        if img_now:
-            mndwi_now = img_now.normalizedDifference(['B3', 'B11'])
-            ndwi_now = img_now.normalizedDifference(['B3', 'B8'])
-            mask_now = mndwi_now.gt(0.0).Or(ndwi_now.gt(0.02))
-        else:
-            mask_now = None
+        mndwi_now = img_now.normalizedDifference(['B3', 'B11']) if img_now else None
+        ndwi_now = img_now.normalizedDifference(['B3', 'B8']) if img_now else None
+        mask_now = mndwi_now.gt(0.0).Or(ndwi_now.gt(0.02)) if img_now else None
 
-        # 2. O'TMISH YILI TASVIRI: Tiniqlik va Pansharpening (Landsat uchun 15m format)
+        # O'tmish yili uchun filtrlash va sozlash
         if p_year >= 2016:
-            col_old = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")\
-                        .filterBounds(region_ee)\
-                        .filterDate(f'{p_year}-04-01', f'{p_year}-10-31')\
-                        .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))
-            
-            if col_old.size().getInfo() > 0:
-                img_old = col_old.median().clip(region_ee)
-            else:
-                col_fallback = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED").filterBounds(region_ee).filterDate(f'{p_year}-01-01', f'{p_year}-12-31').sort('CLOUDY_PIXEL_PERCENTAGE')
-                img_old = col_fallback.first().clip(region_ee) if col_fallback.first() else None
-                
+            col_old = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED").filterBounds(region_ee).filterDate(f'{p_year}-01-01', f'{p_year}-12-31').sort('CLOUDY_PIXEL_PERCENTAGE')
+            img_old = col_old.first().clip(region_ee) if col_old.first() else None
             mask_old = img_old.normalizedDifference(['B3', 'B8']).gt(0.02) if img_old else None
             v_params = {'bands': ['B4', 'B3', 'B2'], 'min': 300, 'max': 3500, 'gamma': 1.2} 
-            
         elif p_year >= 2013:
-            col_old = ee.ImageCollection("LANDSAT/LC08/C02/T1_L2")\
-                        .filterBounds(region_ee)\
-                        .filterDate(f'{p_year}-01-01', f'{p_year}-12-31')\
-                        .sort('CLOUD_COVER')
-            raw_img_old = col_old.first().clip(region_ee) if col_old.first() else None
-            
-            if raw_img_old:
-                # Landsat 8 uchun Pansharpening: 30m ni 15m tiniqlikka o'tkazish (HSV transformatsiyasi)
-                hsv = raw_img_old.select(['SR_B4', 'SR_B3', 'SR_B2']).rgbToHsv()
-                # TO-DO: Tiniq pankromatik qatlamni bog'lash
-                col_pan = ee.ImageCollection("LANDSAT/LC08/C02/T1").filterBounds(region_ee).filterDate(f'{p_year}-01-01', f'{p_year}-12-31').sort('CLOUD_COVER')
-                if col_pan.first():
-                    pan = col_pan.first().select('B8').clip(region_ee)
-                    sharpened = ee.Image.cat([hsv.select('value'), hsv.select('saturation'), pan]).hsvToRgb()
-                    img_old = sharpened
-                else:
-                    img_old = raw_img_old.select(['SR_B4', 'SR_B3', 'SR_B2'])
-                mask_old = raw_img_old.normalizedDifference(['SR_B3', 'SR_B5']).gt(0.02)
-            else:
-                img_old, mask_old = None, None
-            v_params = {'bands': ['B4', 'B3', 'B2'], 'min': 0.05, 'max': 0.35, 'gamma': 1.2} if col_pan.first() else {'bands': ['SR_B4', 'SR_B3', 'SR_B2'], 'min': 7500, 'max': 12500, 'gamma': 1.2}
-            
+            col_old = ee.ImageCollection("LANDSAT/LC08/C02/T1_L2").filterBounds(region_ee).filterDate(f'{p_year}-01-01', f'{p_year}-12-31').sort('CLOUD_COVER')
+            img_old = col_old.first().clip(region_ee) if col_old.first() else None
+            mask_old = img_old.normalizedDifference(['SR_B3', 'SR_B5']).gt(0.02) if img_old else None
+            v_params = {'bands': ['SR_B4', 'SR_B3', 'SR_B2'], 'min': 7500, 'max': 12500, 'gamma': 1.2}
         else:
-            col_old = ee.ImageCollection("LANDSAT/LE07/C02/T1_L2")\
-                        .filterBounds(region_ee)\
-                        .filterDate(f'{p_year}-01-01', f'{p_year}-12-31')\
-                        .sort('CLOUD_COVER')
+            # Landsat 7 chiziqlarini (SLC-off) mukammal tekislash filtri va inpainting korreksiyasi
+            col_old = ee.ImageCollection("LANDSAT/LE07/C02/T1_L2").filterBounds(region_ee).filterDate(f'{p_year}-01-01', f'{p_year}-12-31').sort('CLOUD_COVER')
             raw_img_old = col_old.first().clip(region_ee) if col_old.first() else None
             
             if raw_img_old:
-                # Landsat 7 SLC-off chiziqlarini yo'qotish va uning 15 metrli B8 kanali bilan tiniqlashtirish
-                filled_img = raw_img_old.focal_mean(radius=2, units='pixels', repetitions=3).blend(raw_img_old)
-                hsv = filled_img.select(['SR_B3', 'SR_B2', 'SR_B1']).rgbToHsv()
-                col_pan = ee.ImageCollection("LANDSAT/LE07/C02/T1").filterBounds(region_ee).filterDate(f'{p_year}-01-01', f'{p_year}-12-31').sort('CLOUD_COVER')
-                if col_pan.first():
-                    pan = col_pan.first().select('B8').clip(region_ee)
-                    img_old = ee.Image.cat([hsv.select('value'), hsv.select('saturation'), pan]).hsvToRgb()
-                else:
-                    img_old = filled_img
-                mask_old = filled_img.normalizedDifference(['SR_B2', 'SR_B4']).gt(0.03)
+                img_old = raw_img_old.focal_mean(radius=2, units='pixels', repetitions=3).blend(raw_img_old)
+                mask_old = img_old.normalizedDifference(['SR_B2', 'SR_B4']).gt(0.03)
             else:
                 img_old, mask_old = None, None
-            v_params = {'bands': ['B3', 'B2', 'B1'], 'min': 0.05, 'max': 0.35, 'gamma': 1.3} if col_pan.first() else {'bands': ['SR_B3', 'SR_B2', 'SR_B1'], 'min': 7500, 'max': 12000, 'gamma': 1.3}
+            v_params = {'bands': ['SR_B3', 'SR_B2', 'SR_B1'], 'min': 7500, 'max': 12000, 'gamma': 1.3}
 
         if not img_old or not img_now: return "Tasvirlar topilmadi."
 
@@ -303,9 +253,10 @@ def analyze_full_spectrum(geometry, p_year, f_years):
         smooth_erosion = raw_erosion.convolve(gaussian_kernel).gt(0.45)
         smooth_erosion = smooth_erosion.focal_max(radius=2, units='pixels').focal_min(radius=1, units='pixels').selfMask()
 
-        # KELAJAK BASHORATI (Qizil qatlam)
+        # KELAJAK BASHORATI (Qizil qatlam) - maxDistance xatoligi to'liq tuzatildi
         distance_from_river = mask_now.fastDistanceTransform()
         
+        # Dinamik proksi parametrlar asosida bashorat masofasini hisoblash
         buffer_radius_meters = f_years * 22.0
         pixel_threshold = buffer_radius_meters / 30.0  
         
@@ -427,3 +378,4 @@ if st.session_state.analysis_results:
 if st.sidebar.button(L['logout']):
     st.session_state.auth = False
     st.rerun()
+
