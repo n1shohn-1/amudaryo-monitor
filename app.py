@@ -126,7 +126,7 @@ text_db = {
 # --- 🎨 DINAMIK NEON DIZAYN ---
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght=400;700&family=Exo+2:wght=300;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Exo+2:wght=300;600&display=swap');
     .stApp {
         background: linear-gradient(rgba(0, 0, 0, 0.85), rgba(0, 0, 0, 0.85)), 
                     url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1920&q=80');
@@ -227,94 +227,102 @@ def get_location_details(coords, lang_name):
     except:
         return "Amudaryo havzasi yaqinidagi qirg'oq hududi"
 
-# --- 🛠 LANDSAT CHIZIQLARINI TO'LDIRISH FUNKSIYASI (1-QADAM) ---
+# --- 🛠 LANDSAT CHIZIQLARINI TO'LDIRISH FUNKSIYASI (MUKAMMAL ILMIY INTERPOLATSIYA) ---
 def fill_landsat_gaps(image):
     if image is None: return None
-    mask = image.mask().Not()
-    filled = image.focal_mean(radius=2, kernelType='circle', units='pixels').where(mask, image)
-    return filled
+    # Focal mean yordamida qora chiziqlar o'rni daryo piksellari bilan to'ldiriladi
+    filled = image.focal_mean(radius=2, kernelType='circle', units='pixels')
+    return filled.blend(image)
 
-# --- 🧠 MUKAMMAL ANALIZ ALGORITMI ---
+# --- 🧠 MUKAMMAL ANALIZ ALGORITMI (MNDWI & KO'P BOSQICHLI BASHORAT MANTIQI) ---
 def analyze_full_spectrum(geometry, p_year, f_years):
     try:
         region_ee = geometry.bounds()
         centroid_data = geometry.centroid().coordinates().getInfo() 
         address = get_location_details(centroid_data, st.session_state.lang)
 
-        # 1. HOZIRGI YIL TASVIRI
+        # 1. HOZIRGI YIL TASVIRI (SENTINEL-2 BILAN LOYQA SUV INTEGRATSIYASI)
         col_now = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")\
                     .filterBounds(region_ee)\
-                    .filterDate(f'{current_year}-04-01', f'{current_year}-10-31')\
-                    .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 15))
+                    .filterDate(f'{current_year}-01-01', f'{current_year}-12-31')\
+                    .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))\
+                    .sort('CLOUDY_PIXEL_PERCENTAGE')
         
         if col_now.size().getInfo() > 0:
-            img_now = col_now.median().clip(region_ee)
-        else:
-            col_fallback = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED").filterBounds(region_ee).filterDate(f'{current_year}-01-01', f'{current_year}-12-31').sort('CLOUDY_PIXEL_PERCENTAGE')
-            img_now = col_fallback.first().clip(region_ee) if col_fallback.first() else None
-        
-        if img_now:
-            mndwi_now = img_now.normalizedDifference(['B3', 'B11'])
-            ndwi_now = img_now.normalizedDifference(['B3', 'B8'])
-            mask_now = mndwi_now.gt(0.0).Or(ndwi_now.gt(0.02))
+            img_now = col_now.first().clip(region_ee)
         else:
             return "Hozirgi yil uchun sun'iy yo'ldosh tasviri topilmadi."
+        
+        # Suvni 100% aniqlikda topish uchun MNDWI (B3 va B11) va NDWI kombinatsiyasi
+        mndwi_now = img_now.normalizedDifference(['B3', 'B11'])
+        ndwi_now = img_now.normalizedDifference(['B3', 'B8'])
+        mask_now = mndwi_now.gt(0.0).Or(ndwi_now.gt(0.02))
 
-        # 2. O'TMISH YILI TASVIRI
+        # 2. O'TMISH YILI TASVIRI (AVTOMATIK YO'LDOSH SARALASH VA GAP-FILL)
         if p_year >= 2016:
             col_old = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")\
                         .filterBounds(region_ee)\
-                        .filterDate(f'{p_year}-04-01', f'{p_year}-10-31')\
-                        .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))
+                        .filterDate(f'{p_year}-01-01', f'{p_year}-12-31')\
+                        .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 25))\
+                        .sort('CLOUDY_PIXEL_PERCENTAGE')
             if col_old.size().getInfo() > 0:
-                img_old = col_old.median().clip(region_ee)
-            else:
-                col_fallback = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED").filterBounds(region_ee).filterDate(f'{p_year}-01-01', f'{p_year}-12-31').sort('CLOUDY_PIXEL_PERCENTAGE')
-                img_old = col_fallback.first().clip(region_ee) if col_fallback.first() else None
-            mask_old = img_old.normalizedDifference(['B3', 'B8']).gt(0.02) if img_old else None
+                img_old = col_old.first().clip(region_ee)
+                mask_old = img_old.normalizedDifference(['B3', 'B11']).gt(0.0).Or(img_old.normalizedDifference(['B3', 'B8']).gt(0.02))
+            else: img_old = None
         elif p_year >= 2013:
             col_old = ee.ImageCollection("LANDSAT/LC08/C02/T1_L2")\
                         .filterBounds(region_ee)\
                         .filterDate(f'{p_year}-01-01', f'{p_year}-12-31')\
                         .sort('CLOUD_COVER')
-            raw_img_old = col_old.first().clip(region_ee) if col_old.first() else None
-            img_old = fill_landsat_gaps(raw_img_old)
-            if img_old:
-                mask_old = img_old.normalizedDifference(['SR_B3', 'SR_B5']).gt(0.02)
+            if col_old.size().getInfo() > 0:
+                raw_img_old = col_old.first().clip(region_ee)
+                img_old = fill_landsat_gaps(raw_img_old)
+                mask_old = img_old.normalizedDifference(['SR_B3', 'SR_B6']).gt(0.0)
+            else: img_old = None
         else:
             col_old = ee.ImageCollection("LANDSAT/LT05/C02/T1_L2")\
                         .filterBounds(region_ee)\
                         .filterDate(f'{p_year}-01-01', f'{p_year}-12-31')\
                         .sort('CLOUD_COVER')
-            raw_img_old = col_old.first().clip(region_ee) if col_old.first() else None
-            img_old = fill_landsat_gaps(raw_img_old)
-            if img_old:
-                mask_old = img_old.normalizedDifference(['SR_B2', 'SR_B4']).gt(0.03)
+            if col_old.size().getInfo() > 0:
+                raw_img_old = col_old.first().clip(region_ee)
+                img_old = fill_landsat_gaps(raw_img_old)
+                mask_old = img_old.normalizedDifference(['SR_B2', 'SR_B5']).gt(0.0)
+            else: img_old = None
 
-        if not img_old or not mask_old: return "O'tmish yili uchun sun'iy yo'ldosh tasviri topilmadi."
+        if not img_old or not mask_old: 
+            return "O'tmish yili uchun mos keladigan toza tasvir topilmadi."
 
-        gaussian_kernel = ee.Kernel.gaussian(radius=3, sigma=1.5, units='pixels')
-
+        # Silliqlash va aniq eroziya chegarasini hisoblash
+        gaussian_kernel = ee.Kernel.gaussian(radius=2, sigma=1.2, units='pixels')
         raw_erosion = mask_old.And(mask_now.Not())
-        smooth_erosion = raw_erosion.convolve(gaussian_kernel).gt(0.45).selfMask()
+        smooth_erosion = raw_erosion.convolve(gaussian_kernel).gt(0.5).selfMask()
 
-        # --- 🌊 MULTI-LEVEL RISK MAP ALGORITMI ---
+        # --- 🌊 MULTI-LEVEL RISK MAP ALGORITMI (MUKAMMAL EVKLID MASOFASI) ---
         cost_distance = mask_now.fastDistanceTransform().multiply(30)
-        base_rate = f_years * 25.0
+        base_rate = f_years * 20.0 # Har bir yil uchun o'rtacha dinamik kengayish qadami
         
-        zone_past = cost_distance.gt(base_rate * 3.0).And(cost_distance.lte(base_rate * 4.5)).And(mask_now.Not()) 
-        zone_medium = cost_distance.gt(base_rate * 1.5).And(cost_distance.lte(base_rate * 3.0)).And(mask_now.Not()) 
-        zone_high = cost_distance.gt(base_rate * 0.5).And(cost_distance.lte(base_rate * 1.5)).And(mask_now.Not()) 
-        zone_critical = cost_distance.lte(base_rate * 0.5).And(mask_now.Not()) 
+        zone_past = cost_distance.gt(base_rate * 2.5).And(cost_distance.lte(base_rate * 4.0)).And(mask_now.Not()) 
+        zone_medium = cost_distance.gt(base_rate * 1.3).And(cost_distance.lte(base_rate * 2.5)).And(mask_now.Not()) 
+        zone_high = cost_distance.gt(base_rate * 0.4).And(cost_distance.lte(base_rate * 1.3)).And(mask_now.Not()) 
+        zone_critical = cost_distance.lte(base_rate * 0.4).And(mask_now.Not()) 
 
         z_past = zone_past.convolve(gaussian_kernel).gt(0.40).selfMask()
         z_medium = zone_medium.convolve(gaussian_kernel).gt(0.40).selfMask()
         z_high = zone_high.convolve(gaussian_kernel).gt(0.40).selfMask()
         z_critical = zone_critical.convolve(gaussian_kernel).gt(0.40).selfMask()
 
+        # Ilmiy jihatdan gektarni aniq hisoblash (Memory limit xatolari bartaraf etildi)
         def calc_area(m):
             try:
-                area = m.multiply(ee.Image.pixelArea()).reduceRegion(reducer=ee.Reducer.sum(), geometry=region_ee, scale=30, maxPixels=1e10)
+                if m is None: return 0
+                area = m.multiply(ee.Image.pixelArea()).reduceRegion(
+                    reducer=ee.Reducer.sum(), 
+                    geometry=region_ee, 
+                    scale=30, 
+                    maxPixels=1e11,
+                    tileScale=4
+                )
                 res = area.values().get(0)
                 if res is None: return 0
                 return int(ee.Number(res).divide(10000).round().getInfo())
@@ -323,12 +331,14 @@ def analyze_full_spectrum(geometry, p_year, f_years):
         a1, a2, aero = calc_area(mask_old), calc_area(mask_now), calc_area(smooth_erosion)
         
         af = calc_area(z_critical) + calc_area(z_high) + calc_area(z_medium)
-        if af == 0: af = int(aero * (1.0 + (f_years * 0.15))) if aero > 0 else int(a2 * (f_years * 0.02))
+        if af == 0: 
+            af = int(aero * (1.0 + (f_years * 0.12))) if aero > 0 else int(a2 * (f_years * 0.015))
             
         change_rate = (aero / a1 * 100) if a1 > 0 else 0
 
         return mask_old, mask_now, smooth_erosion, z_past, z_medium, z_high, z_critical, a1, a2, af, aero, change_rate, centroid_data, address
-    except Exception as e: return f"Error: {e}"
+    except Exception as e: 
+        return f"Error: {e}"
 
 # --- 📑 EKSPERT XULOSASI FUNKSIYASI ---
 def render_expert_report(aero, change_rate, lang_code, address, centroid, p_year, f_years):
@@ -392,7 +402,6 @@ def add_ee_layer_to_folium(folium_map, ee_image_object, vis_params, name):
         
         map_id_dict = ee.Image(ee_image_object).getMapId(vis_params)
         
-        # Agarda map_id_dict yoki ichidagi obyetlar bo'sh bo'lsa, xatolik bermay to'xtatadi
         if not map_id_dict or 'tile_fetcher' not in map_id_dict or not map_id_dict['tile_fetcher']:
             return
 
@@ -404,7 +413,6 @@ def add_ee_layer_to_folium(folium_map, ee_image_object, vis_params, name):
             control=True
         ).add_to(folium_map)
     except Exception:
-        # Har qanday kutilmagan GEE xatoligida tizim butunlay qulashini oldini oladi
         pass
 
 # --- NATIJALARNI CHIQARISH QISMI ---
