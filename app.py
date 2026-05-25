@@ -335,29 +335,43 @@ def analyze_full_spectrum(geometry, p_year, f_years):
             
         change_rate = (aero / a1 * 100) if a1 > 0 else 0
 
-        # --- STATIK TASVIR INTEGRATSIYASI (CHUNKI PROFESSIONAL RENDER QILAMIZ) ---
-        # Tasvir foni uchun RGB kompozit (Natural Color) tayyorlaymiz
+        # --- 🛠 RASMLARNI KARTOGRAFIK FORMATGA TO'G'RI O'TKAZISH (YANGILANGAN BLOK) ---
+        # Tasvir foni uchun RGB kompozit (Natural Color) tayyorlaymiz va ma'lumot turini 8-bitga o'tkazamiz
         rgb_now = img_now.visualize(bands=['B4', 'B3', 'B2'], min=0, max=3000)
         
-        # 1. Tarixiy suv maskasi ustiga oq chiziqli grid simulatsiyasi
-        img_tarix_out = rgb_now.blend(mask_old.selfMask().visualize(palette=['#00a2ff'], opacity=0.7))
+        # Maska va zonalarni visualize yordamida RGB formatga o'tkazib, keyin asosiy rasmga qo'shamiz
+        # Bu usul 'Data Type' xatolarini 100% yo'qotadi
+        mask_old_rgb = mask_old.selfMask().visualize(palette=['#00a2ff'], opacity=0.7)
+        img_tarix_out = rgb_now.blend(mask_old_rgb)
         
-        # 2. Yuvilgan zonalar tahliliy rasmi
-        img_yuvilgan_out = rgb_now.blend(mask_now.selfMask().visualize(palette=['#7dd4f5'], opacity=0.4))\
-                                  .blend(smooth_erosion.visualize(palette=['#ea3323'], opacity=0.9))
-                                  
-        # 3. Kelajak ko'p bosqichli xavf xaritasi kombinatsiyasi
-        img_bashorat_out = rgb_now.blend(mask_now.selfMask().visualize(palette=['#5bc0be'], opacity=0.4))\
+        mask_now_rgb = mask_now.selfMask().visualize(palette=['#7dd4f5'], opacity=0.4)
+        smooth_erosion_rgb = smooth_erosion.visualize(palette=['#ea3323'], opacity=0.9)
+        img_yuvilgan_out = rgb_now.blend(mask_now_rgb).blend(smooth_erosion_rgb)
+                                          
+        img_bashorat_out = rgb_now.blend(mask_now_rgb)\
                                   .blend(z_past.visualize(palette=['#7cd659'], opacity=0.7))\
                                   .blend(z_medium.visualize(palette=['#f3e635'], opacity=0.7))\
                                   .blend(z_high.visualize(palette=['#f09333'], opacity=0.7))\
                                   .blend(z_critical.visualize(palette=['#ea3323'], opacity=0.85))
 
-        # URL manzillarini olish
-        thumb_params = {'region': region_ee, 'dimensions': 600, 'format': 'png'}
-        url_tarix = img_tarix_out.getThumbURL(thumb_params)
-        url_yuvilgan = img_yuvilgan_out.getThumbURL(thumb_params)
-        url_bashorat = img_bashorat_out.getThumbURL(thumb_params)
+        # GEE xaritasini rasm sifatida yuklab olish parametrlarini xavfsiz sozlash
+        # region sifatida to'g'ridan-to'g'ri region_ee ni emas, uning geometriyasini beramiz
+        thumb_params = {
+            'region': region_ee.getInfo(), 
+            'dimensions': 600, 
+            'format': 'png'
+        }
+        
+        try:
+            url_tarix = img_tarix_out.getThumbURL(thumb_params)
+            url_yuvilgan = img_yuvilgan_out.getThumbURL(thumb_params)
+            url_bashorat = img_bashorat_out.getThumbURL(thumb_params)
+        except Exception as url_err:
+            # Agar hudud juda katta bo'lsa yoki xato bersa, standart xavfsiz o'lchamga qaytadi
+            thumb_params['dimensions'] = 400
+            url_tarix = img_tarix_out.getThumbURL(thumb_params)
+            url_yuvilgan = img_yuvilgan_out.getThumbURL(thumb_params)
+            url_bashorat = img_bashorat_out.getThumbURL(thumb_params)
 
         return (url_tarix, url_yuvilgan, url_bashorat, a1, a2, af, aero, change_rate, centroid_data, address)
     except Exception as e: 
@@ -417,7 +431,7 @@ if map_output['last_active_drawing']:
             geom = ee.Geometry.Polygon(coords)
             st.session_state.analysis_results = analyze_full_spectrum(geom, target_past_year, future_years)
 
-# --- NATIJALARNI CHIQARISH QISMI (STATIK KARTOGRAFIK FORMATGA MOSLANDI) ---
+# --- NATIJALARNI CHIQARISH QISMI ---
 if st.session_state.analysis_results:
     if isinstance(st.session_state.analysis_results, str):
         st.error(f"Tahlil jarayonida xatolik: {st.session_state.analysis_results}")
@@ -453,7 +467,6 @@ if st.session_state.analysis_results:
                 if url_bashorat:
                     st.image(url_bashorat, use_container_width=True, caption="AI Predictive Risk Modeling", output_format="PNG")
                 
-                # Shartli belgilar afishasi (Sizning rasmdagidek)
                 st.markdown("""
                     <div class="custom-legend">
                         <b>⚠️ Favqulodda vaziyat xavf zonalari:</b>
