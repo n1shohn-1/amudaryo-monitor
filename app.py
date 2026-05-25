@@ -231,7 +231,6 @@ def get_location_details(coords, lang_name):
 def fill_landsat_gaps(image):
     if image is None: return None
     mask = image.mask().Not()
-    # GEE focal_mean funksiyasidagi 'repetitions' olib tashlandi, sof va barqaror sintaksis qo'yildi
     filled = image.focal_mean(radius=2, kernelType='circle', units='pixels').where(mask, image)
     return filled
 
@@ -261,7 +260,7 @@ def analyze_full_spectrum(geometry, p_year, f_years):
         else:
             return "Hozirgi yil uchun sun'iy yo'ldosh tasviri topilmadi."
 
-        # 2. O'TMISH YILI TASVIRI (Landsat bo'shliqlari fill_landsat_gaps orqali to'ldiriladi)
+        # 2. O'TMISH YILI TASVIRI
         if p_year >= 2016:
             col_old = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")\
                         .filterBounds(region_ee)\
@@ -279,7 +278,7 @@ def analyze_full_spectrum(geometry, p_year, f_years):
                         .filterDate(f'{p_year}-01-01', f'{p_year}-12-31')\
                         .sort('CLOUD_COVER')
             raw_img_old = col_old.first().clip(region_ee) if col_old.first() else None
-            img_old = fill_landsat_gaps(raw_img_old) # Landsat-8 nuqsonlarini to'ldirish
+            img_old = fill_landsat_gaps(raw_img_old)
             if img_old:
                 mask_old = img_old.normalizedDifference(['SR_B3', 'SR_B5']).gt(0.02)
         else:
@@ -288,7 +287,7 @@ def analyze_full_spectrum(geometry, p_year, f_years):
                         .filterDate(f'{p_year}-01-01', f'{p_year}-12-31')\
                         .sort('CLOUD_COVER')
             raw_img_old = col_old.first().clip(region_ee) if col_old.first() else None
-            img_old = fill_landsat_gaps(raw_img_old) # Landsat-5 nuqsonlarini to'ldirish
+            img_old = fill_landsat_gaps(raw_img_old)
             if img_old:
                 mask_old = img_old.normalizedDifference(['SR_B2', 'SR_B4']).gt(0.03)
 
@@ -296,12 +295,10 @@ def analyze_full_spectrum(geometry, p_year, f_years):
 
         gaussian_kernel = ee.Kernel.gaussian(radius=3, sigma=1.5, units='pixels')
 
-        # Yuvilgan qism maskasi (2-QADAM)
         raw_erosion = mask_old.And(mask_now.Not())
         smooth_erosion = raw_erosion.convolve(gaussian_kernel).gt(0.45).selfMask()
 
-        # --- 🌊 MULTI-LEVEL RISK MAP ALGORITMI (3-QADAM - fastDistanceTransform tuzatildi) ---
-        # Noto'g'ri 'maxDistance' kalit so'zi olib tashlandi, funksiya positional argument ko'rinishiga keltirildi
+        # --- 🌊 MULTI-LEVEL RISK MAP ALGORITMI ---
         cost_distance = mask_now.fastDistanceTransform().multiply(30)
         base_rate = f_years * 25.0
         
@@ -387,16 +384,28 @@ if map_output['last_active_drawing']:
             geom = ee.Geometry.Polygon(coords)
             st.session_state.analysis_results = analyze_full_spectrum(geom, target_past_year, future_years)
 
-# --- 🗺 FOLIUM QATLAM INTEGRATSIYASI FUNKSIYASI ---
+# --- 🗺 FOLIUM QATLAM INTEGRATSIYASI FUNKSIYASI (TUZATILDI) ---
 def add_ee_layer_to_folium(folium_map, ee_image_object, vis_params, name):
-    map_id_dict = ee.Image(ee_image_object).getMapId(vis_params)
-    folium.raster_layers.TileLayer(
-        tiles=map_id_dict['tile_fetcher'].tile_format,
-        attr='Google Earth Engine',
-        name=name,
-        overlay=True,
-        control=True
-    ).add_to(folium_map)
+    try:
+        if ee_image_object is None:
+            return
+        
+        map_id_dict = ee.Image(ee_image_object).getMapId(vis_params)
+        
+        # Agarda map_id_dict yoki ichidagi obyetlar bo'sh bo'lsa, xatolik bermay to'xtatadi
+        if not map_id_dict or 'tile_fetcher' not in map_id_dict or not map_id_dict['tile_fetcher']:
+            return
+
+        folium.raster_layers.TileLayer(
+            tiles=map_id_dict['tile_fetcher'].tile_format,
+            attr='Google Earth Engine',
+            name=name,
+            overlay=True,
+            control=True
+        ).add_to(folium_map)
+    except Exception:
+        # Har qanday kutilmagan GEE xatoligida tizim butunlay qulashini oldini oladi
+        pass
 
 # --- NATIJALARNI CHIQARISH QISMI ---
 if st.session_state.analysis_results:
@@ -404,7 +413,6 @@ if st.session_state.analysis_results:
         st.error(f"Tahlil jarayonida xatolik: {st.session_state.analysis_results}")
     else:
         try:
-            # GEE Obyektlari va natijalarini ajratib olamiz
             mask_old, mask_now, smooth_erosion, z_past, z_medium, z_high, z_critical, a1, a2, af, aero, c_rate, cent, addr = st.session_state.analysis_results
             
             f_coords = format_coords_by_lang(cent[1], cent[0], L)
@@ -421,13 +429,14 @@ if st.session_state.analysis_results:
             with col1:
                 st.markdown(f"<p style='text-align:center; font-weight:bold;'>{titles[0]}</p>", unsafe_allow_html=True)
                 m1 = folium.Map(location=[cent[1], cent[0]], zoom_start=12, tiles="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", attr="Google Hybrid")
-                # Xatolik oldini olish: mask_old obyekti None emasligini tekshirib keyin foliumga qo'shamiz (4-QADAM)
+                
                 if mask_old is not None:
                     add_ee_layer_to_folium(m1, mask_old.selfMask(), {'palette': ['#00a2ff'], 'opacity': 0.6}, "Tarixiy Suv")
+                
                 st_folium(m1, width="100%", height=380, key="map_tarix")
                 st.markdown(f"<div class='metric-card'>{L['area']}: {vals[0]} GA</div>", unsafe_allow_html=True)
 
-            # --- 🛠 MAP 2: YUVILGAN ZONALAR (SARIQ KONTUR VA TOPO ELEMENTLAR) ---
+            # --- 🛠 MAP 2: YUVILGAN ZONALAR ---
             with col2:
                 st.markdown(f"<p style='text-align:center; font-weight:bold;'>{titles[1]}</p>", unsafe_allow_html=True)
                 m2 = folium.Map(location=[cent[1], cent[0]], zoom_start=12, tiles="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", attr="Google Hybrid")
@@ -440,12 +449,11 @@ if st.session_state.analysis_results:
                 st_folium(m2, width="100%", height=380, key="map_yuvilgan")
                 st.markdown(f"<div class='metric-card'>{L['area']}: {vals[1]} GA</div>", unsafe_allow_html=True)
 
-            # --- 🛠 MAP 3: PROFESSIONAL PROGNOZ BUFER XARITASI VA LEGENDA (5-QADAM) ---
+            # --- 🛠 MAP 3: PROFESSIONAL PROGNOZ BUFER XARITASI VA LEGENDA ---
             with col3:
                 st.markdown(f"<p style='text-align:center; font-weight:bold;'>{titles[2]}</p>", unsafe_allow_html=True)
                 m3 = folium.Map(location=[cent[1], cent[0]], zoom_start=12, tiles="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", attr="Google Hybrid")
                 
-                # GEE hisoblab chiqqan qatlamlarni professional xavf palitrasida yuklaymiz
                 if mask_now is not None:
                     add_ee_layer_to_folium(m3, mask_now.selfMask(), {'palette': ['#5bc0be'], 'opacity': 0.6}, "Daryo")
                 if z_past is not None:
@@ -459,7 +467,6 @@ if st.session_state.analysis_results:
                 
                 st_folium(m3, width="100%", height=380, key="map_bashorat")
                 
-                # Professional geoportallardagidek interaktiv Legenda bloki
                 st.markdown("""
                     <div class="custom-legend">
                         <b>⚠️ Favqulodda vaziyat xavf zonalari:</b>
