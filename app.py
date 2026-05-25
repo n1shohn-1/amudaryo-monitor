@@ -230,7 +230,7 @@ def get_location_details(coords, lang_name):
     except:
         return "Amudaryo havzasi yaqinidagi qirg'oq hududi"
 
-# --- 🛠 LANDSAT CHIZIQLARINI TO'LDIRISH FUNKSIYASI (MUKAMMAL ILMIY INTERPOLATSIYA) ---
+# --- 🛠 LANDSAT CHIZIQLARINI TO'LDIRISH FUNKSIYASI ---
 def fill_landsat_gaps(image):
     if image is None: return None
     filled = image.focal_mean(radius=2, kernelType='circle', units='pixels')
@@ -243,7 +243,7 @@ def analyze_full_spectrum(geometry, p_year, f_years):
         centroid_data = geometry.centroid().coordinates().getInfo() 
         address = get_location_details(centroid_data, st.session_state.lang)
 
-        # 1. HOZIRGI YIL TASVIRI (SENTINEL-2 BILAN LOYQA SUV INTEGRATSIYASI)
+        # 1. HOZIRGI YIL TASVIRI
         col_now = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")\
                     .filterBounds(region_ee)\
                     .filterDate(f'{current_year}-01-01', f'{current_year}-12-31')\
@@ -259,7 +259,7 @@ def analyze_full_spectrum(geometry, p_year, f_years):
         ndwi_now = img_now.normalizedDifference(['B3', 'B8'])
         mask_now = mndwi_now.gt(0.0).Or(ndwi_now.gt(0.02))
 
-        # 2. O'TMISH YILI TASVIRI (AVTOMATIK YO'LDOSH SARALASH VA GAP-FILL)
+        # 2. O'TMISH YILI TASVIRI
         if p_year >= 2016:
             col_old = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")\
                         .filterBounds(region_ee)\
@@ -335,12 +335,9 @@ def analyze_full_spectrum(geometry, p_year, f_years):
             
         change_rate = (aero / a1 * 100) if a1 > 0 else 0
 
-        # --- 🛠 RASMLARNI KARTOGRAFIK FORMATGA TO'G'RI O'TKAZISH (YANGILANGAN BLOK) ---
-        # Tasvir foni uchun RGB kompozit (Natural Color) tayyorlaymiz va ma'lumot turini 8-bitga o'tkazamiz
+        # --- 🛠 RASMLARNI KARTOGRAFIK FORMATGA TO'G'RI O'TKAZISH ---
         rgb_now = img_now.visualize(bands=['B4', 'B3', 'B2'], min=0, max=3000)
         
-        # Maska va zonalarni visualize yordamida RGB formatga o'tkazib, keyin asosiy rasmga qo'shamiz
-        # Bu usul 'Data Type' xatolarini 100% yo'qotadi
         mask_old_rgb = mask_old.selfMask().visualize(palette=['#00a2ff'], opacity=0.7)
         img_tarix_out = rgb_now.blend(mask_old_rgb)
         
@@ -354,8 +351,6 @@ def analyze_full_spectrum(geometry, p_year, f_years):
                                   .blend(z_high.visualize(palette=['#f09333'], opacity=0.7))\
                                   .blend(z_critical.visualize(palette=['#ea3323'], opacity=0.85))
 
-        # GEE xaritasini rasm sifatida yuklab olish parametrlarini xavfsiz sozlash
-        # region sifatida to'g'ridan-to'g'ri region_ee ni emas, uning geometriyasini beramiz
         thumb_params = {
             'region': region_ee.getInfo(), 
             'dimensions': 600, 
@@ -367,7 +362,6 @@ def analyze_full_spectrum(geometry, p_year, f_years):
             url_yuvilgan = img_yuvilgan_out.getThumbURL(thumb_params)
             url_bashorat = img_bashorat_out.getThumbURL(thumb_params)
         except Exception as url_err:
-            # Agar hudud juda katta bo'lsa yoki xato bersa, standart xavfsiz o'lchamga qaytadi
             thumb_params['dimensions'] = 400
             url_tarix = img_tarix_out.getThumbURL(thumb_params)
             url_yuvilgan = img_yuvilgan_out.getThumbURL(thumb_params)
@@ -467,13 +461,36 @@ if st.session_state.analysis_results:
                 if url_bashorat:
                     st.image(url_bashorat, use_container_width=True, caption="AI Predictive Risk Modeling", output_format="PNG")
                 
+                # SIZ SO'RAGAN PROFESSIONAL MUKAMMAL AFISHA-LEGENDA PANEL DIZAYNI
                 st.markdown("""
-                    <div class="custom-legend">
-                        <b>⚠️ Favqulodda vaziyat xavf zonalari:</b>
-                        <div class="legend-item" style="margin-top:5px;"><div class="legend-color" style="background:#7cd659;"></div>🟢 Past xavf (Barqaror zona)</div>
-                        <div class="legend-item"><div class="legend-color" style="background:#f3e635;"></div>🟡 O'rta xavf (Ehtiyotkorlik)</div>
-                        <div class="legend-item"><div class="legend-color" style="background:#f09333;"></div>🟠 Yuqori xavf (Eroziya xavfi)</div>
-                        <div class="legend-item"><div class="legend-color" style="background:#ea3323;"></div>🔴 Juda yuqori xavf (Yemirilish zonasi)</div>
+                    <div style="background-color: white; color: black; border: 2px solid #ccc; padding: 12px; border-radius: 8px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 0.85rem; margin-top: 8px; box-shadow: 2px 2px 6px rgba(0,0,0,0.2);">
+                        <b style="font-size: 0.95rem; color: #111;">LEGENDA</b><br>
+                        <div style="margin-top: 6px; line-height: 1.5;">
+                            <span style="background:#00a2ff; width:22px; height:12px; float:left; margin-right:8px; border-radius:2px; display:inline-block;"></span> Daryo (Amudaryo)<br>
+                            <span style="background:#7dd4f5; width:22px; height:12px; float:left; margin-right:8px; border-radius:2px; display:inline-block;"></span> Suv yuzasi<br>
+                            <span style="border: 2px dashed #ea3323; width:18px; height:10px; float:left; margin-right:8px; display:inline-block;"></span> <span style="color:#ea3323; font-weight:bold;">Qirg'oq yemirilish zonalari</span>
+                        </div>
+                        
+                        <hr style="margin: 8px 0; border: 0; border-top: 1px solid #ddd;">
+                        
+                        <b style="font-size: 0.88rem; color: #111;">⚠️ Favqulodda vaziyat xavf zonalari:</b>
+                        <div style="margin-top: 5px; line-height: 1.5;">
+                            <div class="legend-item"><div class="legend-color" style="background:#7cd659; width:22px; height:12px; float:left; margin-right:8px; border-radius:2px;"></div>🟢 Past xavf</div>
+                            <div class="legend-item"><div class="legend-color" style="background:#f3e635; width:22px; height:12px; float:left; margin-right:8px; border-radius:2px;"></div>🟡 O'rta xavf</div>
+                            <div class="legend-item"><div class="legend-color" style="background:#f09333; width:22px; height:12px; float:left; margin-right:8px; border-radius:2px;"></div>🟠 Yuqori xavf</div>
+                            <div class="legend-item"><div class="legend-color" style="background:#ea3323; width:22px; height:12px; float:left; margin-right:8px; border-radius:2px;"></div>🔴 Juda yuqori xavf</div>
+                        </div>
+                        
+                        <hr style="margin: 8px 0; border: 0; border-top: 1px solid #ddd;">
+                        
+                        <b style="font-size: 0.88rem; color: #111;">🏢 Infratuzilma obyektlari:</b>
+                        <div style="margin-top: 4px; line-height: 1.6; color: #333;">
+                            🛣️ Asosiy avtoyo'llar<br>
+                            🪜 Ko'priklar va o'tkazgichlar<br>
+                            🏭 Gidrotexnika inshootlari<br>
+                            🚰 Suv olish inshootlari<br>
+                            ⚫ Aholi punktlari va massivlar
+                        </div>
                     </div>
                 """, unsafe_allow_html=True)
                 st.markdown(f"<div class='metric-card'>{L['area']}: {af} GA</div>", unsafe_allow_html=True)
