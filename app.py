@@ -281,7 +281,8 @@ def analyze_full_spectrum(geometry, p_year, f_years):
                         .sort('CLOUD_COVER')
             raw_img_old = col_old.first().clip(region_ee) if col_old.first() else None
             if raw_img_old:
-                img_old = raw_img_old.focal_mean(radius=2, units='pixels', repetitions=3).blend(raw_img_old)
+                # --- TO'G'RILANGAN JAYHARI QISM (focal_mean xatosi bartaraf etildi) ---
+                img_old = raw_img_old.focalMean(radius=2, units='pixels').blend(raw_img_old)
                 mask_old = img_old.normalizedDifference(['SR_B2', 'SR_B4']).gt(0.03)
             else:
                 img_old, mask_old = None, None
@@ -295,25 +296,21 @@ def analyze_full_spectrum(geometry, p_year, f_years):
         raw_erosion = mask_old.And(mask_now.Not())
         smooth_erosion = raw_erosion.convolve(gaussian_kernel).gt(0.45).selfMask()
 
-        # --- 🌊 MULTI-LEVEL RISK MAP ALGORITMI (Siz yuborgan rasmdagi tizim) ---
-        # Daryo qirg'og'idan boshlab evklid masofa buferlarini hisoblaymiz (metrda)
-        cost_distance = mask_now.fastDistanceTransform().multiply(30) # Piksellarni metrga o'tkazamiz
+        # --- 🌊 MULTI-LEVEL RISK MAP ALGORITMI ---
+        cost_distance = mask_now.fastDistanceTransform().multiply(30)
         
-        # Slayderdagi yil ko'rsatkichiga qarab dinamik kengayadigan xavf zonalari chegaralari
         base_rate = f_years * 25.0
         
-        zone_past = cost_distance.gt(base_rate * 3.0).And(cost_distance.lte(base_rate * 4.5)).And(mask_now.Not()) # Yashil
-        zone_medium = cost_distance.gt(base_rate * 1.5).And(cost_distance.lte(base_rate * 3.0)).And(mask_now.Not()) # Sariq
-        zone_high = cost_distance.gt(base_rate * 0.5).And(cost_distance.lte(base_rate * 1.5)).And(mask_now.Not()) # To'q sariq
-        zone_critical = cost_distance.lte(base_rate * 0.5).And(mask_now.Not()) # Qizil
+        zone_past = cost_distance.gt(base_rate * 3.0).And(cost_distance.lte(base_rate * 4.5)).And(mask_now.Not()) 
+        zone_medium = cost_distance.gt(base_rate * 1.5).And(cost_distance.lte(base_rate * 3.0)).And(mask_now.Not()) 
+        zone_high = cost_distance.gt(base_rate * 0.5).And(cost_distance.lte(base_rate * 1.5)).And(mask_now.Not()) 
+        zone_critical = cost_distance.lte(base_rate * 0.5).And(mask_now.Not()) 
 
-        # Silliqlash va vizualizatsiyaga tayyorlash
         z_past = zone_past.convolve(gaussian_kernel).gt(0.40).selfMask()
         z_medium = zone_medium.convolve(gaussian_kernel).gt(0.40).selfMask()
         z_high = zone_high.convolve(gaussian_kernel).gt(0.40).selfMask()
         z_critical = zone_critical.convolve(gaussian_kernel).gt(0.40).selfMask()
 
-        # Maydonlarni hisoblash funksiyasi
         def calc_area(m):
             try:
                 area = m.multiply(ee.Image.pixelArea()).reduceRegion(reducer=ee.Reducer.sum(), geometry=region_ee, scale=30, maxPixels=1e10)
@@ -324,7 +321,6 @@ def analyze_full_spectrum(geometry, p_year, f_years):
 
         a1, a2, aero = calc_area(mask_old), calc_area(mask_now), calc_area(smooth_erosion)
         
-        # Umumiy bashorat qilinayotgan xavfli maydon yig'indisi
         af = calc_area(z_critical) + calc_area(z_high) + calc_area(z_medium)
         if af == 0: af = int(aero * (1.0 + (f_years * 0.15))) if aero > 0 else int(a2 * (f_years * 0.02))
             
@@ -333,11 +329,9 @@ def analyze_full_spectrum(geometry, p_year, f_years):
         p = {'region': region_ee.getInfo()['coordinates'], 'dimensions': 800, 'format': 'png'}
         u1 = img_old.visualize(**v_params).getThumbURL(p)
         
-        # Yuvilgan maydon vizualizatsiyasi (Sariq palitra bilan xuddi rasmdagidek)
         v_now = {'bands': ['B4', 'B3', 'B2'], 'min': 300, 'max': 3500, 'gamma': 1.2}
         u2 = img_now.visualize(**v_now).blend(smooth_erosion.visualize(palette=['#e6ff00'], opacity=0.85)).getThumbURL(p)
         
-        # Bashorat qatlamlarini xuddi siz yuborgan chizmadagi ketma-ketlikda ustma-ust kiygizish
         map_predicted = img_now.visualize(**v_now)\
             .blend(z_past.visualize(palette=['#4caf50'], opacity=0.60))\
             .blend(z_medium.visualize(palette=['#ffeb3b'], opacity=0.70))\
@@ -426,7 +420,6 @@ if st.session_state.analysis_results:
                     st.markdown(f"<p style='text-align:center; font-weight:bold;'>{titles[i]}</p>", unsafe_allow_html=True)
                     st.image(imgs[i], use_container_width=True)
                     
-                    # 3-rasm (Bashorat) ostiga siz yuborgandek professional LEGENDA qo'shamiz
                     if i == 2:
                         st.markdown("""
                             <div class="custom-legend">
