@@ -6,9 +6,10 @@ import plotly.express as px
 from datetime import datetime
 import folium
 from streamlit_folium import st_folium
+# TUZATISH: Folium plaginlaridan Draw obyektini to'g'ridan-to'g'ri import qilamiz
+from folium.plugins import Draw
 from geopy.geocoders import Nominatim
 import random
-# 1-QADAM: Rasmga muvofiq kerakli qo'shimcha kutubxonalarni import qilamiz
 import branca.colormap as cm
 
 # 1. SAHIFA SOZLAMALARI
@@ -173,11 +174,6 @@ st.markdown("""
     .loc-box {
         background: rgba(0, 242, 255, 0.1); padding: 10px; border-radius: 10px; border: 1px dashed #00f2ff; margin-bottom: 20px;
     }
-    .legend-container {
-        background: rgba(10, 25, 47, 0.9); border: 1px solid #00f2ff; padding: 15px; border-radius: 12px; margin-top: 10px;
-    }
-    .legend-item { display: flex; align-items: center; margin-bottom: 8px; font-size: 0.9rem; }
-    .legend-color { width: 18px; height: 18px; border-radius: 4px; margin-right: 10px; display: inline-block; }
     .method-step {
         background: rgba(255,255,255,0.05); border-left: 4px solid #00f2ff; padding: 10px 15px; border-radius: 0 8px 8px 0; margin-bottom: 10px;
     }
@@ -305,7 +301,6 @@ def render_expert_report(aero, change_rate, lang_code, address, centroid, p_year
     f_coords = format_coords_by_lang(centroid[1], centroid[0], lang_dict)
     if aero > 20 or change_rate > 15: risk_color, status_idx, advice_key = "#ff4b4b", 0, "critical"
     else: risk_color, status_idx, advice_key = "#00f2ff", 2, "stable"
-    r_t = lang_dict['status'][status_idx]
     
     desc = {
         "O'zbekcha": f"{p_year}-yildan buyon o'tkazilgan kosmik monitoring va gidrologik modellashtirish tahlillari shuni ko'rsatadiki, hudud qirg'oq chizig'ining {change_rate:.1f}% qismi gidrodinamik eroziyaga uchragan. {address} koordinata nuqtasi atrofida jami {aero} GA quruqlik maydoni daryo oqimi tomonidan yuvilgan.",
@@ -325,7 +320,9 @@ st.markdown(f"<h1>{L['title']}</h1>", unsafe_allow_html=True)
 st.subheader(L['map_sub'])
 
 m = folium.Map(location=[41.5, 60.5], zoom_start=8, tiles="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}", attr="Google")
-folium.plugins.Draw(export=False, draw_options={'polyline':False, 'polygon':False, 'circle':False, 'marker':False, 'rectangle':True}).add_to(m)
+
+# TUZATISH: folium.plugins.Draw o'rniga to'g'ridan-to'g'ri import qilingan Draw chaqirildi
+Draw(export=False, draw_options={'polyline':False, 'polygon':False, 'circle':False, 'marker':False, 'rectangle':True}).add_to(m)
 map_output = st_folium(m, width="100%", height=400)
 
 if map_output['last_active_drawing']:
@@ -348,28 +345,28 @@ if st.session_state.analysis_results:
         dynamic_past_title = f"{L['history']} ({target_past_year})"
         dynamic_future_title = f"{L['forecast']} (+{future_years} YIL)"
         
-        # --- 3 TA USTUNLI QISM (MAQSADGA MUVOFIQ) ---
+        # --- 3 TA USTUNLI QISM ---
         col1, col2, col3 = st.columns(3)
         with col1:
             st.markdown(f"<p style='text-align:center; font-weight:bold;'>{dynamic_past_title}</p>", unsafe_allow_html=True)
-            st.image(imgs=u1, use_container_width=True)
+            # TUZATISH: Ortiqcha "imgs=" parametri olib tashlandi
+            if u1: st.image(u1, use_container_width=True)
             st.markdown(f"<div class='metric-card'>{L['area']}: {a1} GA</div>", unsafe_allow_html=True)
         with col2:
             st.markdown(f"<p style='text-align:center; font-weight:bold;'>{L['wash']}</p>", unsafe_allow_html=True)
-            st.image(imgs=u2, use_container_width=True)
+            # TUZATISH: Ortiqcha "imgs=" parametri olib tashlandi
+            if u2: st.image(u2, use_container_width=True)
             st.markdown(f"<div class='metric-card'>{L['area']}: {aero} GA</div>", unsafe_allow_html=True)
         with col3:
             st.markdown(f"<p style='text-align:center; font-weight:bold;'>{dynamic_future_title}</p>", unsafe_allow_html=True)
-            st.image(imgs=u3, use_container_width=True)
+            # TUZATISH: Ortiqcha "imgs=" parametri olib tashlandi
+            if u3: st.image(u3, use_container_width=True)
             st.markdown(f"<div class='metric-card'>{L['area']}: {af} GA</div>", unsafe_allow_html=True)
 
-        # =========================================================================
-        # 🟢 YANGI QO'SHILGAN QISM: IMAGE_9A8B46.JPG RAG'BATLARI ASOSIDA KATTA XARITA INTEGRATSIYASI
-        # =========================================================================
+        # --- KATTA INTERAKTIV GIS XARITA QISMI ---
         st.markdown("---")
         st.subheader(L["gis_map_title"])
         
-        # 2-QADAM: Xavf zonalari GeoJSON ma'lumotlar strukturasini tayyorlaymiz (Poligon koordinatalari bilan)
         risk_geojson = {
             "type": "FeatureCollection",
             "features": [
@@ -396,22 +393,18 @@ if st.session_state.analysis_results:
             ]
         }
 
-        # 3-QADAM: Xavf ranglar palitrasini yaratamiz (Past-yashil, O'rta-sariq, Yuqori-to'q sariq, Juda yuqori-qizil)
         color_map = cm.LinearColormap(
             colors=['green', 'yellow', 'orange', 'red'],
             vmin=1, vmax=4,
             caption="Favqulodda vaziyat xavf darajasi"
         )
 
-        # 4-QADAM: Folium xaritasini yaratamiz (Esri Satellite asosida)
         m_large = folium.Map(location=[cent[1], cent[0]], zoom_start=13, tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", attr="Esri")
         
-        # Simulyatsiya qilingan daryo chizig'i (PolyLine) va ob'ektlar
         river_coords = [[cent[1]-0.05, cent[0]-0.05], [cent[1], cent[0]], [cent[1]+0.05, cent[0]+0.05]]
         folium.PolyLine(river_coords, color="blue", weight=4, tooltip="Amudaryo o'zani").add_to(m_large)
         folium.Marker([cent[1], cent[0]], tooltip="Gidrotexnika inshooti", icon=folium.Icon(color='blue', icon='wrench')).add_to(m_large)
 
-        # 5-QADAM: Xavf zonalarini GeoJSON formatda xaritaga rangli qilib qo'shamiz
         folium.GeoJson(
             risk_geojson,
             style_function=lambda feature: {
@@ -423,13 +416,8 @@ if st.session_state.analysis_results:
             tooltip=folium.GeoJsonTooltip(fields=['risk_name'], aliases=['Xavf darajasi:'])
         ).add_to(m_large)
         
-        # Xaritaga rangli palitra legendasini qo'shish
         color_map.add_to(m_large)
-
-        # 6-QADAM: Xaritani Streamlit'da rasmda ko'rsatilgan aniq kenglik o'lchamlarida chiqaramiz
         st_folium(m_large, width=1400, height=700)
-        
-        # =========================================================================
 
         st.divider()
         m_col1, m_col2 = st.columns([1, 1.2])
