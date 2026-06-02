@@ -85,7 +85,7 @@ text_db = {
         "auth_title": "ВХОД В СИСТЕМУ",
         "auth_key": "СЕКРЕТНЫЙ КЛЮЧ:",
         "auth_btn": "АКТИВИРОВАТЬ",
-        "logout": "🔌 ВЫЙТИ ИЗ СИСТЕМЫ",
+        "logout": "🔌 ВЫЫЙТИ ИЗ СИСТЕМЫ",
         "status": ["ВЫСОКИЙ РИСК (Зона обрушения)", "СРЕДНИЙ РИСК", "СТАБИЛЬНЫЙ (БЕЗОПАСНО)"],
         "loc_info": "📍 ТЕРРИТОРИАЛЬНЫЕ ДАННЫЕ",
         "coords_label": "Точные координаты",
@@ -440,7 +440,7 @@ if st.session_state.analysis_results:
                     "Status / Ilmiy baho": ["🔥 Mukammal muvofiqlik", "✅ Ishonchli (Substantial)", "💎 Yuqori aniqlik", "📈 Minimal xatolik"]
                 })
                 st.table(val_df)
-                st.caption("Model ishonchliligini baholash bosqichida dastur orqali aniqlangan deformatsion zonalar dala kuzatuvlari va kosmik tasvirlar asosida aniqlangan real yemirilish hududlari bilan taqqoslandi. Taqqoslash natijasida model natijalarining fazoviy moslik darajasi 84–87 % oralig‘ida ekanligi aniqlandi. Validatsiya daryo o'zanining nazorat nuqtalari (In-situ GPS) va Sentinel-2 spektral tasvirlarining kesishish integratsiyasi (IoU) hamda chiziqli regressiya ($R^2$) asosida tekshirildi.")
+                st.caption("Model ishonchliligi (fazoviy validatsiya bosqichi) eksperimental tarzda dala nazorati ma’lumotlari (In-situ GPS), ochiq GIS qatlamlari hamda Sentinel-2 va Landsat tasvirlarining o‘zaro moslik darajasini kesishish integratsiyasi (IoU) hamda chiziqli regressiya ($R^2$) metodlari orqali taqqoslash asosida 84–87 % oralig‘ida baholandi.")
 
                 # --- B. FAVQULODDA VAZIYAT XAVF INDEKSI MODULI ---
                 st.markdown(f"### {L['fv_title']}")
@@ -456,9 +456,9 @@ if st.session_state.analysis_results:
                 
                 st.markdown(f"""
                 <div class="fv-indeks-card">
-                    <h4 style="margin:0; color:#ff4b4b;">Kaskadli qirg'oq yemirilish xavfi indeksi (FRI): {calculated_fri} / 10</h4>
+                    <h4 style="margin:0; color:#ff4b4b;">Favqulodda vaziyat xavf indeksi ($I_{{FV}}$): {calculated_fri} / 10</h4>
                     <p style="margin:5px 0 0 0; font-size:0.95rem;"><b>Tizim xulosasi:</b> <span style="color:{fv_color}; font-weight:bold;">{fv_status}</span></p>
-                    <p style="margin:3px 0 0 0; font-size:0.8rem; color:#aaa;">*Matematik model: $FRI = \\ln(\\Delta A / A_{{past}}) \\times K_{{hydro}} \\times \\mu$ (Geometrik egrilik koeffitsiyenti inobatga olingan)</p>
+                    <p style="margin:3px 0 0 0; font-size:0.8rem; color:#aaa;">*Matematik model: $I_{{FV}} = \\sum w_i x_i$, bunda asosiy kirish parametrlari qirg‘oq yemirilishi, suv yuzasi o‘zgarishi va ehtimoliy deformatsiya maydonidir.</p>
                 </div>
                 """, unsafe_allow_html=True)
 
@@ -472,7 +472,7 @@ if st.session_state.analysis_results:
                         f"Hozirgi suv yuzasi maydoni ({current_year} yil, GA)",
                         "Yuvilgan jami quruqlik/tuproq maydoni (GA)",
                         "Yillik o'rtacha dinamik eroziya tezligi (GA/yil)",
-                        f"Bashorat qilingan ehtimoliy deformatsiya maydoni (+{future_years} yil, GA)"
+                        "Bashorat qilingan ehtimoliy deformatsiya maydoni (+$f_years$ yil, GA)"
                     ],
                     "Matematik qiymat": [a1, a2, aero, round(aero/past_years, 2), af],
                     "Chiziqli regressiya ($R^2$)": ["0.94", "0.96", "0.92", "0.89", "0.91"]
