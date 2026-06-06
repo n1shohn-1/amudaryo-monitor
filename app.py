@@ -345,81 +345,31 @@ if st.session_state.analysis_results:
         dynamic_past_title = f"{L['history']} ({target_past_year})"
         dynamic_future_title = f"{L['forecast']} (+{future_years} YIL)"
         
-        # --- 3 TA USTUNLI QISM ---
+       # --- 3 TA USTUNLI QISM ---
         col1, col2, col3 = st.columns(3)
         with col1:
             st.markdown(f"<p style='text-align:center; font-weight:bold;'>{dynamic_past_title}</p>", unsafe_allow_html=True)
-            # TUZATISH: Ortiqcha "imgs=" parametri olib tashlandi
             if u1: st.image(u1, use_container_width=True)
             st.markdown(f"<div class='metric-card'>{L['area']}: {a1} GA</div>", unsafe_allow_html=True)
         with col2:
             st.markdown(f"<p style='text-align:center; font-weight:bold;'>{L['wash']}</p>", unsafe_allow_html=True)
-            # TUZATISH: Ortiqcha "imgs=" parametri olib tashlandi
             if u2: st.image(u2, use_container_width=True)
             st.markdown(f"<div class='metric-card'>{L['area']}: {aero} GA</div>", unsafe_allow_html=True)
         with col3:
             st.markdown(f"<p style='text-align:center; font-weight:bold;'>{dynamic_future_title}</p>", unsafe_allow_html=True)
-            # TUZATISH: Ortiqcha "imgs=" parametri olib tashlandi
             if u3: st.image(u3, use_container_width=True)
             st.markdown(f"<div class='metric-card'>{L['area']}: {af} GA</div>", unsafe_allow_html=True)
 
-        # --- KATTA INTERAKTIV GIS XARITA QISMI ---
+        # =========================================================================
+        # 🗺️ TAYYOR ILMIY XAVF XARITASI (STATIK RASM SIFATIDA)
+        # =========================================================================
         st.markdown("---")
         st.subheader(L["gis_map_title"])
         
-        risk_geojson = {
-            "type": "FeatureCollection",
-            "features": [
-                {
-                    "type": "Feature",
-                    "properties": {"risk": 1, "risk_name": "Past xavf (Barqaror zona)"},
-                    "geometry": {"type": "Polygon", "coordinates": [[[cent[0]-0.04, cent[1]-0.04], [cent[0]+0.04, cent[1]-0.04], [cent[0]+0.04, cent[1]+0.04], [cent[0]-0.04, cent[1]+0.04], [cent[0]-0.04, cent[1]-0.04]]]}
-                },
-                {
-                    "type": "Feature",
-                    "properties": {"risk": 2, "risk_name": "O'rta xavf (Ehtiyotkorlik)"},
-                    "geometry": {"type": "Polygon", "coordinates": [[[cent[0]-0.02, cent[1]-0.02], [cent[0]+0.02, cent[1]-0.02], [cent[0]+0.02, cent[1]+0.02], [cent[0]-0.02, cent[1]+0.02], [cent[0]-0.02, cent[1]-0.02]]]}
-                },
-                {
-                    "type": "Feature",
-                    "properties": {"risk": 3, "risk_name": "Yuqori xavf (Eroziya)"},
-                    "geometry": {"type": "Polygon", "coordinates": [[[cent[0]-0.01, cent[1]-0.01], [cent[0]+0.01, cent[1]-0.01], [cent[0]+0.01, cent[1]+0.01], [cent[0]-0.01, cent[1]+0.01], [cent[0]-0.01, cent[1]-0.01]]]}
-                },
-                {
-                    "type": "Feature",
-                    "properties": {"risk": 4, "risk_name": "Juda yuqori xavf (Yemirilish)"},
-                    "geometry": {"type": "Polygon", "coordinates": [[[cent[0]-0.005, cent[1]-0.005], [cent[0]+0.005, cent[1]-0.005], [cent[0]+0.005, cent[1]+0.005], [cent[0]-0.005, cent[1]+0.005], [cent[0]-0.005, cent[1]-0.005]]]}
-                }
-            ]
-        }
-
-        color_map = cm.LinearColormap(
-            colors=['green', 'yellow', 'orange', 'red'],
-            vmin=1, vmax=4,
-            caption="Favqulodda vaziyat xavf darajasi"
-        )
-
-        m_large = folium.Map(location=[cent[1], cent[0]], zoom_start=13, tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", attr="Esri")
-        
-        river_coords = [[cent[1]-0.05, cent[0]-0.05], [cent[1], cent[0]], [cent[1]+0.05, cent[0]+0.05]]
-        folium.PolyLine(river_coords, color="blue", weight=4, tooltip="Amudaryo o'zani").add_to(m_large)
-        folium.Marker([cent[1], cent[0]], tooltip="Gidrotexnika inshooti", icon=folium.Icon(color='blue', icon='wrench')).add_to(m_large)
-
-        folium.GeoJson(
-            risk_geojson,
-            style_function=lambda feature: {
-                'fillColor': color_map(feature['properties']['risk']),
-                'color': color_map(feature['properties']['risk']),
-                'weight': 1.5,
-                'fillOpacity': 0.4
-            },
-            tooltip=folium.GeoJsonTooltip(fields=['risk_name'], aliases=['Xavf darajasi:'])
-        ).add_to(m_large)
-        
-        color_map.add_to(m_large)
-        st_folium(m_large, width=1400, height=700)
-
-        st.divider()
+        try:
+            st.image("risk_map.png", use_container_width=True)
+        except Exception as e:
+            st.warning("⚠️ 'risk_map.png' fayli topilmadi. Loyiha papkasiga xavf xaritasi tasvirini joylashtiring.")
         m_col1, m_col2 = st.columns([1, 1.2])
         
         with m_col1:
