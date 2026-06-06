@@ -399,8 +399,9 @@ if st.session_state.analysis_results:
             st.dataframe(stat_data, use_container_width=True)
 
             st.markdown(f"### {L['method_title']}")
-            st.markdown('<div class="method-step"><b>1-bosqich:</b> Ma’lumotlarni yig‘ish (Sentinel-2)</div><div class="method-step"><b>2-bosqich:</b> NDWI & MNDWI Spektral indekslar differensatsiyasi</div><div class="method-step"><b>3-bosqich:</b> Evklid masofasi asosida daryo o'zani morfologik buferizatsiyasi</div>', unsafe_allow_html=True)
-        
+            st.markdown('<div class="method-step"><b>1-bosqich:</b> Ma’lumotlarni yig‘ish (Sentinel-2)</div>', unsafe_allow_html=True)
+            st.markdown('<div class="method-step"><b>2-bosqich:</b> NDWI & MNDWI Spektral indekslar differensatsiyasi</div>', unsafe_allow_html=True)
+            st.markdown('<div class="method-step"><b>3-bosqich:</b> Evklid masofasi asosida daryo o\'zani morfologik buferizatsiyasi</div>', unsafe_allow_html=True)
         st.divider()
         render_expert_report(aero, c_rate, st.session_state.lang, addr, cent, target_past_year, future_years)
 
