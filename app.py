@@ -209,9 +209,11 @@ def analyze_full_spectrum(geometry, p_year, f_years):
         col_now = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED").filterBounds(region_ee).filterDate(f'{current_year}-01-01', f'{current_year}-12-31').sort('CLOUDY_PIXEL_PERCENTAGE')
         img_now = col_now.first().clip(region_ee) if col_now.first() else None
         
-        mndwi_now = img_now.normalizedDifference(['B3', 'B11']) if img_now else None
-        ndwi_now = img_now.normalizedDifference(['B3', 'B8']) if img_now else None
-        mask_now = mndwi_now.gt(0.0).Or(ndwi_now.gt(0.02)) if img_now else None
+        if not img_now: return "Hozirgi davr uchun yo'ldosh tasviri topilmadi."
+
+        mndwi_now = img_now.normalizedDifference(['B3', 'B11'])
+        ndwi_now = img_now.normalizedDifference(['B3', 'B8'])
+        mask_now = mndwi_now.gt(0.0).Or(ndwi_now.gt(0.02))
 
         # Tarixiy tasvir (Sentinel-2 yoki Landsat)
         if p_year >= 2016:
@@ -225,21 +227,21 @@ def analyze_full_spectrum(geometry, p_year, f_years):
             mask_old = img_old.normalizedDifference(['SR_B3', 'SR_B5']).gt(0.02) if img_old else None
             v_params = {'bands': ['SR_B4', 'SR_B3', 'SR_B2'], 'min': 7500, 'max': 12500, 'gamma': 1.2}
 
-        if not img_old or not img_now: return "Tasvirlar topilmadi."
+        if not img_old: return "Tarixiy davr uchun yo'ldosh tasviri topilmadi."
 
         # Eroziyani hisoblash
         gaussian_kernel = ee.Kernel.gaussian(radius=3, sigma=1.5, units='pixels')
         raw_erosion = mask_old.And(mask_now.Not())
         smooth_erosion = raw_erosion.convolve(gaussian_kernel).gt(0.45).selfMask()
 
-        # Dynamic Buffer Modellashtirish (Kvadrat poligon o'rniga haqiqiy daryo o'zanidan masofa)
-        distance_from_river = mask_now.fastDistanceTransform().multiply(30) # piksellarni metrga o'giramiz (Sentinel-2 = 30m)
+        # Dynamic Buffer Modellashtirish (Masofani piksellardan metrga o'giramiz)
+        distance_from_river = mask_now.fastDistanceTransform().multiply(30)
 
-        # 🟢 DISSertatsiyadagi 4 TA ILMIY XAVF DARAJALARI BUFERI (Daryo o'zani geometriyasi bo'ylab)
-        past_xavf = distance_from_river.gt(1500).And(distance_from_river.lte(3000)).filterBounds(region_ee)
-        orta_xavf = distance_from_river.gt(500).And(distance_from_river.lte(1500))
-        yuqori_xavf = distance_from_river.gt(150).And(distance_from_river.lte(500))
-        juda_yuqori_xavf = distance_from_river.lte(150).And(mask_now.Not()) # Qirg'oqning eng yaqin qismi
+        # Xatolik tuzatildi: filterBounds o'rniga mask_now cheklovi qo'yildi
+        past_xavf = distance_from_river.gt(1500).And(distance_from_river.lte(3000)).updateMask(mask_now.Not())
+        orta_xavf = distance_from_river.gt(500).And(distance_from_river.lte(1500)).updateMask(mask_now.Not())
+        yuqori_xavf = distance_from_river.gt(150).And(distance_from_river.lte(500)).updateMask(mask_now.Not())
+        juda_yuqori_xavf = distance_from_river.lte(150).And(mask_now.Not())
 
         # Bashorat xaritasi uchun rasm
         smooth_future_risk = distance_from_river.lte(f_years * 25).And(mask_now.Not()).selfMask()
@@ -264,14 +266,13 @@ def analyze_full_spectrum(geometry, p_year, f_years):
         u2 = img_now.visualize(**v_now).blend(smooth_erosion.visualize(palette=['#ffff00'], opacity=0.75)).getThumbURL(p)
         u3 = img_now.visualize(**v_now).blend(smooth_future_risk.visualize(palette=['#ff1111'], opacity=0.85)).getThumbURL(p)
         
-        # 🗺️ Haqiqiy daryo geometriyasidan GeoJSON poligonlarini olish
+        # Vektorizatsiya (GeoJSON qilish)
         def to_geojson(ee_mask):
             try:
-                vectors = ee_mask.selfMask().reduceToVectors(geometry=region_ee, scale=100, maxPixels=1e7)
+                vectors = ee_mask.selfMask().reduceToVectors(geometry=region_ee, scale=150, maxPixels=1e6)
                 return vectors.getInfo()
             except: return {"type": "FeatureCollection", "features": []}
 
-        # Har bir xavf zonasini daryo bo'ylab vektorizatsiya qilish
         geojson_juda_yuqori = to_geojson(juda_yuqori_xavf)
         geojson_yuqori = to_geojson(yuqori_xavf)
         geojson_orta = to_geojson(orta_xavf)
