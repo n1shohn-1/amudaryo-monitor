@@ -143,7 +143,7 @@ st.markdown("""
         border-radius: 10px; transition: 0.4s;
     }
     .stButton>button:hover {
-        background: #00f2ff !important; color: #000 !important;
+        background: #00f2ff !important; color: #00!important;
         box-shadow: 0 0 20px #00f2ff;
     }
     .loc-box {
@@ -237,14 +237,14 @@ def analyze_full_spectrum(geometry, p_year, f_years):
         raw_erosion = mask_old.And(mask_now.Not())
         smooth_erosion = raw_erosion.convolve(gaussian_kernel).gt(0.45).selfMask()
         
-        # Eroziya maskasining asosi (fastDistanceTransform xato bermasligi uchun nol bilan to'ldirilgan holati)
+        # Eroziya maskasining asosi
         smooth_erosion_filled = smooth_erosion.unmask(0)
 
-        # 🌊 TUZATILGAN ILMIY-GIBRID XAVF ZONALARI ALGORITMI 🌊
+        # 🌊 MEZONLAR VA MULTI-CHIZIQLI MASOFA ALGORITMI 🌊
         water_mask = mask_now.selfMask()
         land_mask = mask_now.Not()
 
-        # Evklid masofalari transforamtsiyasi (Daryodan va Real yuvilish o'choqlaridan)
+        # Evklid masofalari transformatsiyasi
         distance_from_river = water_mask.fastDistanceTransform().sqrt().multiply(30)
         distance_from_erosion = smooth_erosion_filled.fastDistanceTransform().sqrt().multiply(30)
 
@@ -272,7 +272,7 @@ def analyze_full_spectrum(geometry, p_year, f_years):
             .selfMask()
         )
 
-        # 🔴 JUDA YUQORI XAVF (Qizil): Real yemirilgan o'choqlarning 100 metrlik yaqinlik doirasi ("cho'ntaklar")
+        # 🔴 JUDA YUQORI XAVF (Qizil): Real yemirilgan o'choqlarning 100 metrlik yaqinlik doirasi
         juda_yuqori_xavf = (
             distance_from_erosion.lte(100)
             .And(land_mask)
@@ -323,7 +323,7 @@ def render_expert_report(aero, change_rate, lang_code, address, centroid, p_year
     else: risk_color = "#00f2ff"
     
     desc = {
-        "O'zbekcha": f"{p_year}-yildan buyon o'tkazilgan kosmik monitoring va gibrid gidrologik modellashtirish tahlillari shuni ko'rsatadiki, hudud qirg'oq chizig'ining {change_rate:.1f}% qismi dinamik eroziyaga uchragan. {address} koordinata nuqtasi atrofida jami {aero} GA quruqlik maydoni daryo oqimi tomonidan yuvilgan bo'lib, xavf zonalari gibrid (Deformatsiya + Bufer) algoritmi yordamida aniqlangan.",
+        "O'zbekcha": f"{p_year}-yildan buyon o'tkazilgan kosmik monitoring va gibrid gidrologik modellashtirish tahlillari shuni ko'rsatadiki, hudud qirg'oq chizig'ining {change_rate:.1f}% qismi dinamik eroziyaga uchragan. {address} koordinata nuqtasi atrofida jami {aero} GA quruqlik maydoni daryo oqimi tomonidan yuvilgan bo'lb, xavf zonalari gibrid (Deformatsiya + Bufer) algoritmi yordamida aniqlangan.",
         "Русский": f"Анализ космического мониторинга и гибридного гидрологического моделирования с {p_year} года показывает, что {change_rate:.1f}% береговой линии подверглось динамической эрозии.",
         "English": f"Space monitoring and hybrid hydrological modeling analysis since {p_year} indicates that {change_rate:.1f}% of the shoreline has undergone dynamic erosion."
     }
@@ -377,52 +377,62 @@ if st.session_state.analysis_results:
             st.markdown(f"<div class='metric-card'>{L['area']}: {af} GA</div>", unsafe_allow_html=True)
 
         # =========================================================================
-        # 🗺️ 💻 INTERAKTIV VA GEOMORFOLOGIK GIBRID GIS XARITA
+        # 🗺️ INTERAKTIV VA GEOMORFOLOGIK GIBRID GIS XARITA (Legenda To'g'rilandi)
         # =========================================================================
         st.markdown("---")
         st.subheader(L["gis_map_title"])
         
-        # Yangi Folium xaritasi (Esri Sun'iy yo'ldosh asosi)
+        # Esri Sun'iy yo'ldosh asosi
         m_large = folium.Map(location=[cent[1], cent[0]], zoom_start=13, tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", attr="Esri")
         
-        # Ranglar palitrasi
+        # Ranglar va uslublar palitrasi
         styles = [
             {'fillColor': '#2dc432', 'color': 'transparent', 'weight': 0, 'fillOpacity': 0.35}, # Past xavf (Yashil)
             {'fillColor': '#ffd700', 'color': 'transparent', 'weight': 0, 'fillOpacity': 0.40}, # O'rta xavf (Sariq)
             {'fillColor': '#ff7800', 'color': 'transparent', 'weight': 0, 'fillOpacity': 0.45}, # Yuqori xavf (To'q sariq)
             {'fillColor': '#ff0000', 'color': 'transparent', 'weight': 0, 'fillOpacity': 0.55}  # Juda yuqori xavf (Qizil)
         ]
-        names = ["Past xavf (Barqaror fon)", "O'rta xavf (Potensial bufer)", "Yuqori xavf (Eroziya ta'sir doirasi)", "Juda yuqori xavf (Aktiv yemirilish o'chog'i)"]
+        
+        # Til bo'yicha nomlar integratsiyasi
+        if st.session_state.lang == "Русский":
+            names = ["Низкий риск (Стабильный фон)", "Средний риск (Потенциальный буфер)", "Высокий риск (Зона влияния эрозии)", "Очень высокий риск (Активный очаг)"]
+            leg_title = "Легенда гибридной модели рисков"
+        elif st.session_state.lang == "English":
+            names = ["Low risk (Stable background)", "Medium risk (Potential buffer)", "High risk (Erosion impact zone)", "Very high risk (Active collapse zone)"]
+            leg_title = "Hybrid Risk Model Legend"
+        else:
+            names = ["Past xavf (Barqaror fon zonasi)", "O'rta xavf (Potensial daryo buferi)", "Yuqori xavf (Eroziya ta'sir doirasi)", "Juda yuqori xavf (Aktiv yemirilish o'chog'i)"]
+            leg_title = "Gibrid Model Xavf Legendasi"
 
-        # Daryo o'zani bo'ylab hosil bo'lgan zonalarni yuklash
+        # Qatlamlarni xaritaga yuklash
         for idx, layer in enumerate(geojson_layers):
             if layer["features"]:
                 folium.GeoJson(
                     layer,
                     style_function=lambda feature, s=styles[idx]: s,
-                    tooltip=folium.Tooltip(f"Xavf darajasi: {names[idx]}")
+                    tooltip=folium.Tooltip(f"{names[idx]}")
                 ).add_to(m_large)
 
-        # Markazga marker
+        # Markazga nuqta
         folium.Marker([cent[1], cent[0]], tooltip="Tahlil markazi nuqtasi", icon=folium.Icon(color='red', icon='info-sign')).add_to(m_large)
         
-        # 📊 📜 GIBRID MODEL SHARTLI BELGILAR LEGENDASI (Metrikalar yangilandi)
-        legend_html = '''
+        # Dynamic Injecting Legend to HTML (Fiksatsiyalangan zamonaviy Neon dizayn)
+        legend_html = f'''
         <div style="position: fixed; 
-                    bottom: 50px; left: 50px; width: 330px; height: 165px; 
-                    background-color: rgba(10, 25, 47, 0.9); border: 2px solid #00f2ff;
+                    bottom: 50px; left: 50px; width: 360px; height: 165px; 
+                    background-color: rgba(10, 25, 47, 0.95); border: 2px solid #00f2ff;
                     padding: 15px; font-size: 12px; font-family: 'Exo 2', sans-serif; color: white;
-                    border-radius: 10px; z-index:9999; box-shadow: 0 0 15px rgba(0,242,255,0.2);">
-        <b style="font-family: 'Orbitron'; color: #00f2ff; font-size: 13px; display: block; margin-bottom: 8px;">Gibrid Model Xavf Legendasi</b>
-        <i style="background:#ff0000; width: 18px; height: 12px; float: left; margin-right: 8px; border-radius:2px;"></i> <b>Juda yuqori xavf:</b> Aktiv yemirilish o'chog'i (&le;100m) <br>
-        <i style="background:#ff7800; width: 18px; height: 12px; float: left; margin-right: 8px; border-radius:2px;"></i> <b>Yuqori xavf:</b> Eroziya ta'sir doirasi (80m - 250m) <br>
-        <i style="background:#ffd700; width: 18px; height: 12px; float: left; margin-right: 8px; border-radius:2px;"></i> <b>O'rta xavf:</b> Potensial daryo buferi (&le;600m) <br>
-        <i style="background:#2dc432; width: 18px; height: 12px; float: left; margin-right: 8px; border-radius:2px;"></i> <b>Past xavf:</b> Barqaror fon zonasi (1200m - 2200m)
+                    border-radius: 10px; z-index:9999; box-shadow: 0 0 15px rgba(0,242,255,0.35);">
+        <b style="font-family: 'Orbitron', sans-serif; color: #00f2ff; font-size: 13px; display: block; margin-bottom: 8px;">{leg_title}</b>
+        <div style="margin-bottom: 6px;"><i style="background:#ff0000; width: 18px; height: 12px; float: left; margin-top:2px; margin-right: 8px; border-radius:2px;"></i> <b>{names[3]}:</b> &le;100 m</div>
+        <div style="margin-bottom: 6px;"><i style="background:#ff7800; width: 18px; height: 12px; float: left; margin-top:2px; margin-right: 8px; border-radius:2px;"></i> <b>{names[2]}:</b> 80 m - 250 m</div>
+        <div style="margin-bottom: 6px;"><i style="background:#ffd700; width: 18px; height: 12px; float: left; margin-top:2px; margin-right: 8px; border-radius:2px;"></i> <b>{names[1]}:</b> &le;600 m</div>
+        <div><i style="background:#2dc432; width: 18px; height: 12px; float: left; margin-top:2px; margin-right: 8px; border-radius:2px;"></i> <b>{names[0]}:</b> 1200 m - 2200 m</div>
         </div>
         '''
         m_large.get_root().html.add_child(folium.Element(legend_html))
 
-        # Xaritani chiqarish
+        # Xaritani render qilish
         st_folium(m_large, width=1400, height=650)
         # =========================================================================
 
@@ -455,6 +465,7 @@ if st.session_state.analysis_results:
             st.markdown('<div class="method-step"><b>1-bosqich:</b> Ma’lumotlarni yig‘ish va filtrlash (Sentinel-2 SR)</div>', unsafe_allow_html=True)
             st.markdown('<div class="method-step"><b>2-bosqich:</b> Spektral differensatsiya va Yuvilish o\'choqlarini aniqlash</div>', unsafe_allow_html=True)
             st.markdown('<div class="method-step"><b>3-bosqich:</b> Gibrid rayonlashtirish (Evklid masofasi + Deformatsiya o\'choqlari integratsiyasi)</div>', unsafe_allow_html=True)
+            
         st.divider()
         render_expert_report(aero, c_rate, st.session_state.lang, addr, cent, target_past_year, future_years)
 
