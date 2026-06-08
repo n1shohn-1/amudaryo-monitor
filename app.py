@@ -225,7 +225,7 @@ def analyze_full_spectrum(geometry, p_year, f_years):
             mask_old = img_old.normalizedDifference(['B3', 'B8']).gt(0.02) if img_old else None
             v_params = {'bands': ['B4', 'B3', 'B2'], 'min': 300, 'max': 3500, 'gamma': 1.2} 
         else:
-            col_old = ee.ImageCollection("LANDSAT/LC08/C02/T1_L2").filterBounds(region_ee).filterDate(f'{p_year}-01-01', f'{p_year}-12-31').sort('CLOUD_COVER')
+            col_old = ee.ImageCollection("LANDSAT/LC02/T1_L2").filterBounds(region_ee).filterDate(f'{p_year}-01-01', f'{p_year}-12-31').sort('CLOUD_COVER')
             img_old = col_old.first().clip(region_ee) if col_old.first() else None
             mask_old = img_old.normalizedDifference(['SR_B3', 'SR_B5']).gt(0.02) if img_old else None
             v_params = {'bands': ['SR_B4', 'SR_B3', 'SR_B2'], 'min': 7500, 'max': 12500, 'gamma': 1.2}
@@ -273,13 +273,13 @@ def analyze_full_spectrum(geometry, p_year, f_years):
             .selfMask()
         )
 
-       # 🔴 JUDA YUQORI XAVF (Qizil): Faqat real yemirilgan o'choqlarning 100 metrlik yaqinlik doirasi
-# raw_erosion filtri olib tashlandi, shunda chiroyli "qizil cho'ntaklar" hosil bo'ladi
-juda_yuqori_xavf = (
-    distance_from_erosion.lte(100)
-    .And(land_mask)
-    .selfMask()
-)
+        # 🔴 JUDA YUQORI XAVF (Qizil): Faqat real yemirilgan o'choqlarning 100 metrlik yaqinlik doirasi
+        # Shunda chiroyli "qizil cho'ntaklar" hosil bo'ladi
+        juda_yuqori_xavf = (
+            distance_from_erosion.lte(100)
+            .And(land_mask)
+            .selfMask()
+        )
 
         # Kelajak deformatsiya bashorati maydoni
         smooth_future_risk = distance_from_river.lte(f_years * 25).And(land_mask).selfMask()
@@ -292,8 +292,8 @@ juda_yuqori_xavf = (
             except: return 0
 
         a1, a2, aero = calc_area(mask_old), calc_area(mask_now), calc_area(smooth_erosion)
-        af = calc_area(smooth_future_risk)
-        if af == 0: af = int(aero * (1.0 + (f_years * 0.15)))
+        of_val = calc_area(smooth_future_risk)
+        af = of_val if of_val != 0 else int(aero * (1.0 + (f_years * 0.15)))
             
         change_rate = (aero / a1 * 100) if a1 > 0 else 0
 
