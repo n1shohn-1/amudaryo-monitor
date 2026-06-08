@@ -225,7 +225,7 @@ def analyze_full_spectrum(geometry, p_year, f_years):
             mask_old = img_old.normalizedDifference(['B3', 'B8']).gt(0.02) if img_old else None
             v_params = {'bands': ['B4', 'B3', 'B2'], 'min': 300, 'max': 3500, 'gamma': 1.2} 
         else:
-            col_old = ee.ImageCollection("LANDSAT/LC02/T1_L2").filterBounds(region_ee).filterDate(f'{p_year}-01-01', f'{p_year}-12-31').sort('CLOUD_COVER')
+            col_old = ee.ImageCollection("LANDSAT/LC08/C02/T1_L2").filterBounds(region_ee).filterDate(f'{p_year}-01-01', f'{p_year}-12-31').sort('CLOUD_COVER')
             img_old = col_old.first().clip(region_ee) if col_old.first() else None
             mask_old = img_old.normalizedDifference(['SR_B3', 'SR_B5']).gt(0.02) if img_old else None
             v_params = {'bands': ['SR_B4', 'SR_B3', 'SR_B2'], 'min': 7500, 'max': 12500, 'gamma': 1.2}
@@ -248,18 +248,17 @@ def analyze_full_spectrum(geometry, p_year, f_years):
         distance_from_river = water_mask.fastDistanceTransform().sqrt().multiply(30)
         distance_from_erosion = smooth_erosion_filled.fastDistanceTransform().sqrt().multiply(30)
 
-        # 🟢 PAST XAVF: Daryodan uzoq, barqaror fon zonalari (1500m dan 3000m gacha)
+        # 🟢 PAST XAVF: Barqaror fon zonasi (1200m dan 2200m gacha daryodan cheklangan)
         past_xavf = (
-            distance_from_river.gt(1500)
-            .And(distance_from_river.lte(3000))
+            distance_from_river.gt(1200)
+            .And(distance_from_river.lte(2200))
             .And(land_mask)
             .selfMask()
         )
 
-        # 🟡 O'RTA XAVF: Daryo yaqinidagi potensial xavf hududlari (800m gacha bo'lgan fon buferi)
-        # Bunda faol eroziya zonalarining to'g'ridan-to'g'ri ta'sirini chiqarib tashlaymiz
+        # 🟡 O'RTA XAVF: Potensial daryo buferi (600m gacha cheklangan)
         orta_xavf = (
-            distance_from_river.lte(800)
+            distance_from_river.lte(600)
             .And(distance_from_erosion.gt(250))
             .And(land_mask)
             .selfMask()
@@ -273,8 +272,7 @@ def analyze_full_spectrum(geometry, p_year, f_years):
             .selfMask()
         )
 
-        # 🔴 JUDA YUQORI XAVF (Qizil): Faqat real yemirilgan o'choqlarning 100 metrlik yaqinlik doirasi
-        # Shunda chiroyli "qizil cho'ntaklar" hosil bo'ladi
+        # 🔴 JUDA YUQORI XAVF (Qizil): Real yemirilgan o'choqlarning 100 metrlik yaqinlik doirasi ("cho'ntaklar")
         juda_yuqori_xavf = (
             distance_from_erosion.lte(100)
             .And(land_mask)
@@ -304,10 +302,9 @@ def analyze_full_spectrum(geometry, p_year, f_years):
         u2 = img_now.visualize(**v_now).blend(smooth_erosion.visualize(palette=['#ffff00'], opacity=0.75)).getThumbURL(p)
         u3 = img_now.visualize(**v_now).blend(smooth_future_risk.visualize(palette=['#ff1111'], opacity=0.85)).getThumbURL(p)
         
-        # 🛠️ VEKTORIZATSIYA (Silliqlashtirilgan va egiluvchan konturlar uchun optimallashtirilgan scale)
+        # 🛠️ VEKTORIZATSIYA
         def to_geojson(ee_mask, custom_scale=30):
             try:
-                # custom_scale qanchalik kichik bo'lsa, chiziqlar shunchalik tabiiy va notekis chiqadi
                 vectors = ee_mask.selfMask().reduceToVectors(geometry=region_ee, scale=custom_scale, maxPixels=1e8)
                 return vectors.getInfo()
             except: return {"type": "FeatureCollection", "features": []}
@@ -388,16 +385,16 @@ if st.session_state.analysis_results:
         # Yangi Folium xaritasi (Esri Sun'iy yo'ldosh asosi)
         m_large = folium.Map(location=[cent[1], cent[0]], zoom_start=13, tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", attr="Esri")
         
-        # Ranglar palitrasi (Mayinlik darajasi andozaga moslandi)
+        # Ranglar palitrasi
         styles = [
             {'fillColor': '#2dc432', 'color': 'transparent', 'weight': 0, 'fillOpacity': 0.35}, # Past xavf (Yashil)
             {'fillColor': '#ffd700', 'color': 'transparent', 'weight': 0, 'fillOpacity': 0.40}, # O'rta xavf (Sariq)
             {'fillColor': '#ff7800', 'color': 'transparent', 'weight': 0, 'fillOpacity': 0.45}, # Yuqori xavf (To'q sariq)
             {'fillColor': '#ff0000', 'color': 'transparent', 'weight': 0, 'fillOpacity': 0.55}  # Juda yuqori xavf (Qizil)
         ]
-        names = ["Past xavf (Barqaror fon zonasi)", "O'rta xavf (Potensial bufer)", "Yuqori xavf (Eroziya ta'sir doirasi)", "Juda yuqori xavf (Aktiv yemirilish o'chog'i)"]
+        names = ["Past xavf (Barqaror fon)", "O'rta xavf (Potensial bufer)", "Yuqori xavf (Eroziya ta'sir doirasi)", "Juda yuqori xavf (Aktiv yemirilish o'chog'i)"]
 
-        # Daryo o'zani bo'ylab hosil bo'lgan zonalarni folium.Tooltip bilan yuklaymiz
+        # Daryo o'zani bo'ylab hosil bo'lgan zonalarni yuklash
         for idx, layer in enumerate(geojson_layers):
             if layer["features"]:
                 folium.GeoJson(
@@ -406,10 +403,10 @@ if st.session_state.analysis_results:
                     tooltip=folium.Tooltip(f"Xavf darajasi: {names[idx]}")
                 ).add_to(m_large)
 
-        # Markazga marker va gidrotexnika belgisi
+        # Markazga marker
         folium.Marker([cent[1], cent[0]], tooltip="Tahlil markazi nuqtasi", icon=folium.Icon(color='red', icon='info-sign')).add_to(m_large)
         
-        # 📊 📜 GIBRID MODEL SHARTLI BELGILAR LEGENDASI
+        # 📊 📜 GIBRID MODEL SHARTLI BELGILAR LEGENDASI (Metrikalar yangilandi)
         legend_html = '''
         <div style="position: fixed; 
                     bottom: 50px; left: 50px; width: 330px; height: 165px; 
@@ -419,13 +416,13 @@ if st.session_state.analysis_results:
         <b style="font-family: 'Orbitron'; color: #00f2ff; font-size: 13px; display: block; margin-bottom: 8px;">Gibrid Model Xavf Legendasi</b>
         <i style="background:#ff0000; width: 18px; height: 12px; float: left; margin-right: 8px; border-radius:2px;"></i> <b>Juda yuqori xavf:</b> Aktiv yemirilish o'chog'i (&le;100m) <br>
         <i style="background:#ff7800; width: 18px; height: 12px; float: left; margin-right: 8px; border-radius:2px;"></i> <b>Yuqori xavf:</b> Eroziya ta'sir doirasi (80m - 250m) <br>
-        <i style="background:#ffd700; width: 18px; height: 12px; float: left; margin-right: 8px; border-radius:2px;"></i> <b>O'rta xavf:</b> Potensial daryo buferi (&le;800m) <br>
-        <i style="background:#2dc432; width: 18px; height: 12px; float: left; margin-right: 8px; border-radius:2px;"></i> <b>Past xavf:</b> Barqaror fon zonasi (1500m - 3000m)
+        <i style="background:#ffd700; width: 18px; height: 12px; float: left; margin-right: 8px; border-radius:2px;"></i> <b>O'rta xavf:</b> Potensial daryo buferi (&le;600m) <br>
+        <i style="background:#2dc432; width: 18px; height: 12px; float: left; margin-right: 8px; border-radius:2px;"></i> <b>Past xavf:</b> Barqaror fon zonasi (1200m - 2200m)
         </div>
         '''
         m_large.get_root().html.add_child(folium.Element(legend_html))
 
-        # Xaritani Streamlit ekranga chiqarish
+        # Xaritani chiqarish
         st_folium(m_large, width=1400, height=650)
         # =========================================================================
 
