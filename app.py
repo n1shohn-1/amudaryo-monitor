@@ -13,12 +13,12 @@ import random
 # 1. SAHIFA SOZLAMALARI
 st.set_page_config(
     page_title="Amudaryo AI-Predictor Pro",
-    page_icon=" 🛰 ",
+    page_icon="🛰",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# ---  🛰  GOOGLE EARTH ENGINE ULANISHI ---
+# --- 🛰 GOOGLE EARTH ENGINE ULANISHI ---
 try:
     if "earth_engine" in st.secrets:
         ee_key_raw = st.secrets["earth_engine"]["json_key"]
@@ -28,7 +28,7 @@ try:
     else:
         ee.Initialize(project='ee-nusratullayev38')
 except Exception as e:
-    st.error(f" 🛰  Tizimga ulanishda xatolik: {e}")
+    st.error(f"🛰 Tizimga ulanishda xatolik: {e}")
     st.stop()
 
 # --- 🧠 SESSION STATE ---
@@ -39,25 +39,25 @@ if 'lang' not in st.session_state:
 if "auth" not in st.session_state:
     st.session_state.auth = False
 
-# ---  🌍  3-TILLI LUG'AT (ILMIY ATAMALAR O'ZBEKCHALASHTIRILGAN) ---
+# --- 🌍 3-TILLI LUG'AT (ILMIY ATAMALAR O'ZBEKCHALASHTIRILGAN) ---
 text_db = {
     "O'zbekcha": {
-        "title": " 🌊  AMUDARYO AI-MONITOR PRO",
-        "map_sub": " 📍  Tahlil maydonini xaritada belgilang",
-        "btn": " 🔍  HUDUDNI ANALIZ QILISH",
-        "sidebar": " 🛠  TIZIM BOSHQARUVI",
+        "title": "🌊 AMUDARYO AI-MONITOR PRO",
+        "map_sub": "📍 Tahlil maydonini xaritada belgilang",
+        "btn": "🔍 HUDUDNI ANALIZ QILISH",
+        "sidebar": "🛠 TIZIM BOSHQARUVI",
         "history": "TARIX",
         "wash": "YUVILGAN ZONALARI",
         "forecast": "BASHORAT REJASI",
         "area": "Maydon",
         "risk": "XAVF DARAJASI",
-        "expert_title": " 📑  EKSPERTIZANING RASMIY BAYONNOMASI",
+        "expert_title": "📑 EKSPERTIZANING RASMIY BAYONNOMASI",
         "auth_title": "TIZIMGA KIRISH",
         "auth_key": "MAXFIY KALIT:",
         "auth_btn": "FAOLLASHTIRISH",
-        "logout": " 🔌  TIZIMNI O'CHIRISH",
+        "logout": "🔌 TIZIMNI O'CHIRISH",
         "status": ["JUDA YUQORI XAVF (Yemirilish zonasi)", "O'RTA XAVF (Ehtiyotkorlik)", "BARQAROR (XAVFSIZ)"],
-        "loc_info": " 📍  HUDUDIY MA'LUMOTLAR",
+        "loc_info": "📍 HUDUDIY MA'LUMOTLAR",
         "coords_label": "Aniq koordinatalar",
         "address_label": "Rasmiy manzil",
         "directions": {"N": "Sh.k", "S": "J.k", "E": "Sh.u", "W": "G'.u"},
@@ -66,29 +66,29 @@ text_db = {
             "stable": "Vaziyat barqaror. Monitoringni davom ettirish va daryo bo'yida tabiiy to'siqlar (tol, itshumurt) ekish maqsadga muvofiq."
         },
         "slider_past": "⏳ O'tmish davri (1 - 20 yil oldin?):",
-        "slider_future": " 🔮  Bashorat davri (1 - 20 yildan keyin?):",
-        "val_title": " 📊  Model ishonchliligini baholash (Aniqlik darajasi)",
-        "method_title": " ⚙ ️ Tizim Metodologiyasi va Ma'lumotlar Oqimi (4.2-rasm algoritmi)",
-        "fv_title": " ⚠ ️ Favqulodda vaziyat xavf indeksi ($I_{FV}$) va Model Statistikasi",
-        "stat_title": " 📈  Yakuniy statistik jadval (4.6-§ muvofiq)"
+        "slider_future": "🔮 Bashorat davri (1 - 20 yildan keyin?):",
+        "val_title": "📊 Model ishonchliligini baholash (Aniqlik darajasi)",
+        "method_title": "⚙️ Tizim Metodologiyasi va Ma'lumotlar Oqimi (4.2-rasm algoritmi)",
+        "fv_title": "⚠️ Favqulodda vaziyat xavf indeksi ($I_{FV}$) va Model Statistikasi",
+        "stat_title": "📈 Yakuniy statistik jadval (4.6-§ muvofiq)"
     },
     "Русский": {
-        "title": " 🌊  АМУДАРЬЯ AI-MONITOR PRO",
-        "map_sub": " 📍  Отметьте область на карте",
-        "btn": " 🔍  АНАЛИЗИРОВАТЬ ОБЛАСТЬ",
-        "sidebar": " 🛠  УПРАВЛЕНИЕ СИСТЕМОЙ",
+        "title": "🌊 АМУДАРЬЯ AI-MONITOR PRO",
+        "map_sub": "📍 Отметьте область на карте",
+        "btn": "🔍 АНАЛИЗИРОВАТЬ ОБЛАСТЬ",
+        "sidebar": "🛠 УПРАВЛЕНИЕ СИСТЕМОЙ",
         "history": "ИСТОРИЯ",
         "wash": "РАЗМЫТЫЕ ЗОНЫ",
         "forecast": "ПРОГНОЗНЫЙ ПЛАН",
         "area": "Площадь",
         "risk": "УРОВЕНЬ РИСКА",
-        "expert_title": " 📑  ОФИЦИАЛЬНЫЙ ОТЧЕТ ЭКСПЕРТИЗЫ",
+        "expert_title": "📑 ОФИЦИАЛЬНЫЙ ОТЧЕТ ЭКСПЕРТИЗЫ",
         "auth_title": "ВХОД В СИСТЕМУ",
         "auth_key": "СЕКРЕТНЫЙ КЛЮЧ:",
         "auth_btn": "АКТИВИРОВАТЬ",
-        "logout": " 🔌  ВЫЙТИ ИЗ СИСТЕМЫ",
+        "logout": "🔌 ВЫЙТИ ИЗ СИСТЕМЫ",
         "status": ["ВЫСОКИЙ РИСК (Зона обрушения)", "СРЕДНИЙ РИСК", "СТАБИЛЬНЫЙ (БЕЗОПАСНО)"],
-        "loc_info": " 📍  ТЕРРИТОРИАЛЬНЫЕ ДАННЫЕ",
+        "loc_info": "📍 ТЕРРИТОРИАЛЬНЫЕ ДАННЫЕ",
         "coords_label": "Точные координаты",
         "address_label": "Официальный адрес",
         "directions": {"N": "с.ш.", "S": "ю.ш.", "E": "в.д.", "W": "з.д."},
@@ -97,29 +97,29 @@ text_db = {
             "stable": "Ситуация стабильна. Рекомендуется посадка берегозащитных лесонасаждений и плановый мониторинг."
         },
         "slider_past": "⏳ Прошлый период (от 1 до 20 лет назад?):",
-        "slider_future": " 🔮  Период прогноза (от 1 до 20 лет?):",
-        "val_title": " 📊  Оценка надежности модели (Точность)",
-        "method_title": " ⚙ ️ Методология Системы и Поток Данных",
-        "fv_title": " ⚠ ️ Индекс риска чрезвычайных ситуаций",
-        "stat_title": " 📈  Итоговая статистическая таблица (согласно § 4.6)"
+        "slider_future": "🔮 Период прогноза (от 1 до 20 лет?):",
+        "val_title": "📊 Оценка надежности модели (Точность)",
+        "method_title": "⚙️ Методология Системы и Поток Данных",
+        "fv_title": "⚠️ Индекс риска чрезвычайных ситуаций",
+        "stat_title": "📈 Итоговая статистическая таблица (согласно § 4.6)"
     },
     "English": {
-        "title": " 🌊  AMUDARYA AI-MONITOR PRO",
-        "map_sub": " 📍  Mark the area on the map",
-        "btn": " 🔍  ANALYZE SELECTED AREA",
-        "sidebar": " 🛠  SYSTEM CONTROL",
+        "title": "🌊 AMUDARYA AI-MONITOR PRO",
+        "map_sub": "📍 Mark the area on the map",
+        "btn": "🔍 ANALYZE SELECTED AREA",
+        "sidebar": "🛠 SYSTEM CONTROL",
         "history": "HISTORY",
         "wash": "ERODED ZONES",
         "forecast": "FORECAST PLAN",
         "area": "Area",
         "risk": "RISK LEVEL",
-        "expert_title": " 📑  OFFICIAL EXPERT REPORT",
+        "expert_title": "📑 OFFICIAL EXPERT REPORT",
         "auth_title": "SYSTEM LOGIN",
         "auth_key": "SECRET KEY:",
         "auth_btn": "ACTIVATE",
-        "logout": " 🔌  SHUTDOWN SYSTEM",
+        "logout": "🔌 SHUTDOWN SYSTEM",
         "status": ["HIGH RISK (Collapse Zone)", "MEDIUM RISK (Caution)", "STABLE (SAFE)"],
-        "loc_info": " 📍  LOCATION DATA",
+        "loc_info": "📍 LOCATION DATA",
         "coords_label": "Precise Coordinates",
         "address_label": "Official Address",
         "directions": {"N": "N", "S": "S", "E": "E", "W": "W"},
@@ -128,15 +128,15 @@ text_db = {
             "stable": "The area is hydrologically stable. Continued monitoring and planting of riparian vegetation are recommended."
         },
         "slider_past": "⏳ Historical period (1 to 20 years ago?):",
-        "slider_future": " 🔮  Forecast period (1 to 20 years later?):",
-        "val_title": " 📊  Model Reliability Evaluation (Accuracy)",
-        "method_title": " ⚙ ️ System Methodology & Data Pipeline",
-        "fv_title": " ⚠ ️ Emergency Risk Index & Statistics",
-        "stat_title": " 📈  Final Statistical Table (According to § 4.6)"
+        "slider_future": "🔮 Forecast period (1 to 20 years later?):",
+        "val_title": "📊 Model Reliability Evaluation (Accuracy)",
+        "method_title": "⚙️ System Methodology & Data Pipeline",
+        "fv_title": "⚠️ Emergency Risk Index & Statistics",
+        "stat_title": "📈 Final Statistical Table (According to § 4.6)"
     }
 }
 
-# ---  🎨  DINAMIK NEON DIZAYN ---
+# --- 🎨 DINAMIK NEON DIZAYN ---
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Exo+2:wght@300;600&display=swap');
@@ -183,7 +183,7 @@ background: rgba(255, 75, 75, 0.1); border: 1px solid #ff4b4b; padding: 15px; bo
 </style>
 """, unsafe_allow_html=True)
 
-# ---  🔐  XAVFSIZLIK ---
+# --- 🔐 XAVFSIZLIK ---
 if not st.session_state.auth:
     _, col_auth, _ = st.columns([1,1.2,1])
     with col_auth:
@@ -197,12 +197,12 @@ if not st.session_state.auth:
             else: st.error("Xato!")
     st.stop()
 
-# ---  🌐  TILNI TANLASH VA SIDEBAR ---
-st.session_state.lang = st.sidebar.selectbox(" 🌐  Choose Language / Tilni tanlang", ["O'zbekcha", "Русский", "English"])
+# --- 🌐 TILNI TANLASH VA SIDEBAR ---
+st.session_state.lang = st.sidebar.selectbox("🌐 Choose Language / Tilni tanlang", ["O'zbekcha", "Русский", "English"])
 L = text_db[st.session_state.lang]
 st.sidebar.markdown(f"### {L['sidebar']}")
 
-# ---  🎛  DINAMIK SLAYDERLAR INTEGRATSIYASI ---
+# --- 🎛 DINAMIK SLAYDERLAR INTEGRATSIYASI ---
 st.sidebar.markdown("---")
 past_years = st.sidebar.slider(L["slider_past"], min_value=1, max_value=20, value=5, step=1)
 future_years = st.sidebar.slider(L["slider_future"], min_value=1, max_value=20, value=5, step=1)
@@ -215,7 +215,7 @@ def format_coords_by_lang(lat, lon, lang_dict):
     ew = lang_dict['directions']["E"] if lon >= 0 else lang_dict['directions']["W"]
     return f"{abs(lat):.6f}° {ns}, {abs(lon):.6f}° {ew}"
 
-# ---  🛰  HUDUD NOMINI ANIQLASH ---
+# --- 🛰 HUDUD NOMINI ANIQLASH ---
 def get_location_details(coords, lang_name):
     try:
         mapping = {"O'zbekcha": "uz", "Русский": "ru", "English": "en"}
@@ -265,7 +265,9 @@ def analyze_full_spectrum(geometry, p_year, f_years):
                 img_old, mask_old = None, None
             v_params = {'bands': ['SR_B3', 'SR_B2', 'SR_B1'], 'min': 7500, 'max': 12000, 'gamma': 1.3}
             
-        if not img_old or not img_now: return "Tasvirlar topilmadi."
+        # 1-TUZATISH: Tasvirlarni mavjudligini tekshirish xavfsiz holatga keltirildi
+        if img_old is None or img_now is None:
+            return "Tasvirlar topilmadi."
         
         gaussian_kernel = ee.Kernel.gaussian(radius=3, sigma=1.5, units='pixels')
         # Yuvilgan hudud maskasi (Sariq qatlam)
@@ -282,7 +284,7 @@ def analyze_full_spectrum(geometry, p_year, f_years):
         smooth_future_risk = raw_future_risk.convolve(gaussian_kernel).gt(0.40)
         smooth_future_risk = smooth_future_risk.focal_max(radius=1.5, units='pixels').focal_min(radius=1, units='pixels').selfMask()
         
-        # 2-TUZATISH: YANGI INTERAKTIV XAVF XARITASI ALGORITMI QO'SHILDI
+        # YANGI INTERAKTIV XAVF XARITASI ALGORITMI
         smooth_erosion_filled = smooth_erosion.unmask(0)
 
         water_mask = mask_now.selfMask()
@@ -356,11 +358,10 @@ def analyze_full_spectrum(geometry, p_year, f_years):
         u2 = img_now.visualize(**v_now).blend(smooth_erosion.visualize(palette=['#ffff00'], opacity=0.75)).getThumbURL(p)
         u3 = img_now.visualize(**v_now).blend(smooth_future_risk.visualize(palette=['#ff1111'], opacity=0.85)).getThumbURL(p)
 
-        # 3-TUZATISH: return qatori yangi geojson ro'yxati bilan o'zgartirildi
         return u1, u2, u3, a1, a2, af, aero, change_rate, centroid_data, address, [geojson_past, geojson_orta, geojson_yuqori, geojson_juda_yuqori]
     except Exception as e: return f"Error: {e}"
 
-# ---  📑  EKSPERT XULOSASI FUNKSIYASI ---
+# --- 📑 EKSPERT XULOSASI FUNKSIYASI ---
 def render_expert_report(aero, change_rate, lang_code, address, centroid, p_year, f_years):
     lang_dict = text_db[lang_code]
     f_coords = format_coords_by_lang(centroid[1], centroid[0], lang_dict)
@@ -382,7 +383,7 @@ def render_expert_report(aero, change_rate, lang_code, address, centroid, p_year
 <h3 style='color: {risk_color}; margin: 0;'>{lang_dict['expert_title']}</h3>
 <div class="loc-box" style="margin-top:15px;">
 <p style="margin:0; font-size:0.9rem;">🧭 <b>{lang_dict['coords_label']}:</b> {f_coords}</p>
-<p style="margin:0; font-size:0.9rem;"> 📍  <b>{lang_dict['address_label']}:</b> {address}</p>
+<p style="margin:0; font-size:0.9rem;">📍 <b>{lang_dict['address_label']}:</b> {address}</p>
 </div>
 <div style="display: flex; gap: 20px; margin-top: 10px;">
 <p style="margin: 0;"><b>{lang_dict['risk']}:</b> <span style="color:{risk_color}; font-weight: bold;">{r_t}</span></p>
@@ -398,18 +399,17 @@ def render_expert_report(aero, change_rate, lang_code, address, centroid, p_year
 </div>
 """, unsafe_allow_html=True)
 
-# ---  🚀  ASOSIY EKRAN ---
+# --- 🚀 ASOSIY EKRAN ---
 st.markdown(f"<h1>{L['title']}</h1>", unsafe_allow_html=True)
 st.subheader(L['map_sub'])
 m = folium.Map(location=[41.5, 60.5], zoom_start=8, tiles="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}", attr="Google")
 
-# 1-TUZATISH: folium.plugins.Draw o'rniga to'g'ridan-to'g'ri chaqirildi va parametrlar berildi
 Draw(export=False, draw_options={'polyline':False, 'polygon':False, 'circle':False, 'marker':False, 'rectangle':True}).add_to(m)
 map_output = st_folium(m, width="100%", height=400)
 
 if map_output['last_active_drawing']:
     if st.button(L['btn']):
-        with st.spinner(" 🛰  AI Tahlil qilmoqda..."):
+        with st.spinner("🛰 AI Tahlil qilmoqda..."):
             coords = map_output['last_active_drawing']['geometry']['coordinates'][0]
             geom = ee.Geometry.Polygon(coords)
             st.session_state.analysis_results = analyze_full_spectrum(geom, target_past_year, future_years)
@@ -420,7 +420,6 @@ if st.session_state.analysis_results:
         st.error(f"Tahlil jarayonida xatolik: {st.session_state.analysis_results}")
     else:
         try:
-            # 4-TUZATISH: Natijalarni qabul qiladigan joy geojson_layers bilan o'zgartirildi
             u1, u2, u3, a1, a2, af, aero, c_rate, cent, addr, geojson_layers = st.session_state.analysis_results
 
             f_coords = format_coords_by_lang(cent[1], cent[0], L)
@@ -443,18 +442,14 @@ if st.session_state.analysis_results:
                 st.image(imgs[1], use_container_width=True, caption="4.3(b)-rasm: Dinamik qirg'oq yemirilishi va yuvilish zonalari")
                 st.markdown(f"<div class='metric-card'>{L['area']}: {vals[1]} GA</div>", unsafe_allow_html=True)
 
+                # 2-TUZATISH: Kichik legenda ichidagi chizilmagan infratuzilma obyektlari qismi olib tashlandi
                 st.markdown(f"""
 <div class="legend-container">
-<p style="margin:0 0 10px 0; font-weight:bold; color:#00f2ff; font-size:0.85rem;"> ⚠ ️ FAVQULODDA VAZIYAT XAVF ZONALARI:</p>
+<p style="margin:0 0 10px 0; font-weight:bold; color:#00f2ff; font-size:0.85rem;">⚠️ FAVQULODDA VAZIYAT XAVF ZONALARI:</p>
 <div class="legend-item"><span class="legend-color" style="background:#00ff00;"></span>Past xavf (Barqaror zona)</div>
 <div class="legend-item"><span class="legend-color" style="background:#ffff00;"></span>O'rta xavf (Ehtiyotkorlik)</div>
 <div class="legend-item"><span class="legend-color" style="background:#ffaa00;"></span>Yuqori xavf (Eroziya xavfi)</div>
 <div class="legend-item"><span class="legend-color" style="background:#ff0000;"></span>Juda yuqori xavf (Yemirilish zonasi)</div>
-<hr style="opacity:0.2; margin:10px 0;">
-<p style="margin:0 0 5px 0; font-weight:bold; color:#00f2ff; font-size:0.85rem;"> 🏗 ️ INFRATUZILMA OBYEKTLARI:</p>
-<div class="legend-item"> ➖  Asosiy yo'llar</div>
-<div class="legend-item"> 🌉  Ko'priklar va o'tkazgichlar</div>
-<div class="legend-item"> 🎛  Gidrotexnika inshootlari</div>
 </div>
 """, unsafe_allow_html=True)
             with col3:
@@ -462,7 +457,7 @@ if st.session_state.analysis_results:
                 st.image(imgs[2], use_container_width=True, caption=f"4.3(c)-rasm: Keyingi {future_years} yillik ehtimoliy bashorat xaritasi")
                 st.markdown(f"<div class='metric-card'>{L['area']}: {vals[2]} GA</div>", unsafe_allow_html=True)
             
-            # 5-TUZATISH: with col3 blokidan keyin yangi katta GIS xaritasi bloki qo'shildi
+            # KATTA INTERAKTIV GIS XARITASI BLOKI
             st.markdown("---")
             st.subheader("🗺️ Favqulodda vaziyat xavf zonalari xaritasi (Dinamik Gibrid GIS)")
 
@@ -523,7 +518,6 @@ if st.session_state.analysis_results:
             m_col1, m_col2 = st.columns([1, 1.2])
 
             with m_col1:
-                # --- 1-TUZATISH: VALIDATSIYA KIMYOVY/SUN'IY RADOMDAN TO'LIQ TOZALANDI (Ratsional Statik Qiymatlar) ---
                 st.markdown(f"### {L['val_title']}")
 
                 overall_accuracy = "86.3%"
@@ -539,23 +533,22 @@ if st.session_state.analysis_results:
                         "O\u02bbrtacha kvadratik xatolik (RMSE)"
                     ],
                     "Qiymat": [overall_accuracy, kappa_score, f1_score, rmse_val],
-                    "Status / Ilmiy baho": [" 🔥  Mukammal muvofiqlik", " \u2705  Ishonchli (Substantial)", " \ud83d\udc8e  Yuqori aniqlik", " \ud83d\udcc8  Minimal xatolik"]
+                    "Status / Ilmiy baho": ["🔥 Mukammal muvofiqlik", "✅ Ishonchli (Substantial)", "💎 Yuqori aniqlik", "📈 Minimal xatolik"]
                 })
                 st.table(val_df)
                 st.caption("Model ishonchliligi dala kuzatuvlari, Sentinel-2 tasvirlari va GIS qatlamlari o\u2018zaro taqqoslanishi (In-situ nazorat nuqtalari integratsiyasi) asosida dissertatsiyaning test poligonlarida 84\u201387 % oralig\u2018ida mutlaq baholangan.")
                 
-                # --- 2-TUZATISH: I_FV FORMULASI VA HISOB KOEFFITSIYENTLAR POYDEVORI ---
                 st.markdown(f"### {L['fv_title']}")
 
                 raw_ratio = (aero / a1) if a1 > 0 else 0.15
                 calculated_ifv = min(round((raw_ratio * 0.45 + 0.35), 2), 1.0)
 
                 if calculated_ifv > 0.75:
-                    fv_status, fv_color = " \ud83d\udd34  KRITIK XAVF (Favqulodda vaziyat holati)", "#ff4b4b"
+                    fv_status, fv_color = "🔴 KRITIK XAVF (Favqulodda vaziyat holati)", "#ff4b4b"
                 elif calculated_ifv > 0.45:
-                    fv_status, fv_color = "\ud83d\udee1 O'RTA XAVF (Doimiy monitoring talab etiladi)", "#ffff00"
+                    fv_status, fv_color = "🛡️ O'RTA XAVF (Doimiy monitoring talab etiladi)", "#ffff00"
                 else:
-                    fv_status, fv_color = "\ud83d\udfe2 BARQAROR GIDROLOGIK HOLAT", "#00ff00"
+                    fv_status, fv_color = "🟢 BARQAROR GIDROLOGIK HOLAT", "#00ff00"
 
                 st.markdown(f"""
 <div class="fv-indeks-card">
@@ -565,7 +558,6 @@ if st.session_state.analysis_results:
 </div>
 """, unsafe_allow_html=True)
             with m_col2:
-                # --- 3-TUZATISH: JADVALDAGI F-STRING FORMAT XATOSI TUZATILDI (+{future_years} yil) ---
                 st.markdown(f"### {L['stat_title']}")
 
                 stat_data = pd.DataFrame({
@@ -580,9 +572,8 @@ if st.session_state.analysis_results:
                     "Chiziqli regressiya ($R^2$)": ["0.94", "0.96", "0.92", "0.89", "0.91"]
                 })
                 st.dataframe(stat_data, use_container_width=True)
-                st.caption("Ushbu statistik tahlil jadvali dissertatsiyaning 4.6-\u00a7 dagi jadvallarga to'g'ridan-to'g'ri ilmiy asos sifatida kiritilishi uchun mo'ljallangan.")
+                st.caption("Ushbu statistik tahlil jadvali dissertatsiyaning 4.6-\u00a7 dagi jadvallarga to'g'diran-to'g'ri ilmiy asos sifatida kiritilishi uchun mo'ljallangan.")
                 
-                # --- 4-TUZATISH: METODOLOGIYA BOSQICHLARI 4.2-RASM BILAN 100% MOSLASHTIRILDI (AI va GIS Integratsiyasi) ---
                 st.markdown(f"### {L['method_title']}")
                 st.markdown(f"""
 <div class="method-step">
