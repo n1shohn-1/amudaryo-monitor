@@ -273,14 +273,13 @@ def analyze_full_spectrum(geometry, p_year, f_years):
             .selfMask()
         )
 
-        # 🔴 JUDA YUQORI XAVF: Faqat va faqat real yemirilgan faol o'choqlar (<=100m)
-        # Butun daryo bo'ylab parallel ketmaydi, qizil "cho'ntaklar" hosil qiladi
-        juda_yuqori_xavf = (
-            distance_from_erosion.lte(100)
-            .And(raw_erosion.Or(smooth_erosion))
-            .And(land_mask)
-            .selfMask()
-        )
+       # 🔴 JUDA YUQORI XAVF (Qizil): Faqat real yemirilgan o'choqlarning 100 metrlik yaqinlik doirasi
+# raw_erosion filtri olib tashlandi, shunda chiroyli "qizil cho'ntaklar" hosil bo'ladi
+juda_yuqori_xavf = (
+    distance_from_erosion.lte(100)
+    .And(land_mask)
+    .selfMask()
+)
 
         # Kelajak deformatsiya bashorati maydoni
         smooth_future_risk = distance_from_river.lte(f_years * 25).And(land_mask).selfMask()
